@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BEAD_CATALOGS,
+  formatHexWithHash,
+  nearestBead,
+  type PreparedBeadCatalog,
+} from "./beadCatalog";
+import {
   buildBrickGrid,
   extractPalette,
   parseHexColor,
   rgbToCss,
   type BrickCell,
+  type GridLayout,
   type RGB,
 } from "./beadMath";
 
@@ -58,9 +65,11 @@ function paintBrickPreview(
     zoom: number;
     pad: number;
     showEmptyAsTransparent: boolean;
+    layout: GridLayout;
   },
 ) {
-  const { zoom, pad, ignoreBackground, showEmptyAsTransparent } = options;
+  const { zoom, pad, ignoreBackground, showEmptyAsTransparent, layout } =
+    options;
   const cs = cellSize * zoom;
   const radius = cs * 0.48;
 
@@ -73,7 +82,9 @@ function paintBrickPreview(
       ? 0
       : Math.max(...cells.map((c) => c.row)) + 1;
   const width =
-    pad * 2 + (maxCol + 1) * cellSize * zoom + (cellSize * zoom) / 2;
+    layout === "brick"
+      ? pad * 2 + (maxCol + 1) * cs + cs / 2
+      : pad * 2 + (maxCol + 1) * cs;
   const height = pad * 2 + rows * cellSize * zoom;
 
   ctx.canvas.width = Math.max(1, Math.ceil(width));
@@ -82,7 +93,8 @@ function paintBrickPreview(
   drawCheckerboard(ctx, 0, 0, ctx.canvas.width, ctx.canvas.height, "#f0f0f0", "#d8d8d8", 8);
 
   for (const cell of cells) {
-    const ox = (cell.row % 2 === 1 ? cs / 2 : 0) + pad;
+    const ox =
+      (layout === "brick" && cell.row % 2 === 1 ? cs / 2 : 0) + pad;
     const cx = ox + cell.col * cs + cs / 2;
     const cy = pad + cell.row * cs + cs / 2;
 
@@ -122,10 +134,14 @@ export default function App() {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [bitmap, setBitmap] = useState<HTMLImageElement | null>(null);
   const [paletteSize, setPaletteSize] = useState(10);
-  const [cellSize, setCellSize] = useState(10);
+  const [beadsPerRow, setBeadsPerRow] = useState(60);
+  const [gridLayout, setGridLayout] = useState<GridLayout>("brick");
   const [backgroundHex, setBackgroundHex] = useState(DEFAULT_BG);
   const [ignoreBackground, setIgnoreBackground] = useState(true);
   const [previewZoom, setPreviewZoom] = useState(1.2);
+  const [beadCatalogId, setBeadCatalogId] = useState(
+    BEAD_CATALOGS[0]?.id ?? "preciosa-ibeadsmaster",
+  );
 
   const patternCanvasRef = useRef<HTMLCanvasElement>(null);
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -134,6 +150,12 @@ export default function App() {
     () => parseHexColor(backgroundHex),
     [backgroundHex],
   );
+
+  const beadCatalog: PreparedBeadCatalog = useMemo(() => {
+    return (
+      BEAD_CATALOGS.find((c) => c.id === beadCatalogId) ?? BEAD_CATALOGS[0]
+    );
+  }, [beadCatalogId]);
 
   const onFile = useCallback((f: File | null) => {
     if (!f) return;
@@ -158,6 +180,11 @@ export default function App() {
     };
   }, [fileUrl]);
 
+  const cellSizePx = useMemo(() => {
+    if (!bitmap || bitmap.width <= 0) return 1;
+    return bitmap.width / Math.max(2, beadsPerRow);
+  }, [bitmap, beadsPerRow]);
+
   const { palette, cells } = useMemo(() => {
     if (!bitmap || bitmap.width === 0) {
       return { palette: [] as RGB[], cells: [] as BrickCell[] };
@@ -169,19 +196,25 @@ export default function App() {
       bgThresholdSq: BG_MATCH_SQ,
       sampleStep: PALETTE_SAMPLE_STEP,
     });
-    const gridCells = buildBrickGrid(imageData, cellSize, pal, {
+    const gridCells = buildBrickGrid(imageData, cellSizePx, pal, {
       ignoreBackground,
       background: backgroundRgb,
       bgThresholdSq: BG_MATCH_SQ,
+      layout: gridLayout,
     });
     return { palette: pal, cells: gridCells };
   }, [
     bitmap,
     paletteSize,
-    cellSize,
+    cellSizePx,
     backgroundRgb,
     ignoreBackground,
+    gridLayout,
   ]);
+
+  const beadMatches = useMemo(() => {
+    return palette.map((c) => nearestBead(c, beadCatalog));
+  }, [palette, beadCatalog]);
 
   useEffect(() => {
     const sc = sourceCanvasRef.current;
@@ -197,13 +230,22 @@ export default function App() {
     sctx.drawImage(bitmap, 0, 0, sc.width, sc.height);
 
     const pctx = pc.getContext("2d")!;
-    paintBrickPreview(pctx, cells, cellSize, palette, {
+    paintBrickPreview(pctx, cells, cellSizePx, palette, {
       ignoreBackground,
       zoom: previewZoom,
       pad: 6,
       showEmptyAsTransparent: true,
+      layout: gridLayout,
     });
-  }, [bitmap, cells, cellSize, palette, ignoreBackground, previewZoom]);
+  }, [
+    bitmap,
+    cells,
+    cellSizePx,
+    palette,
+    ignoreBackground,
+    previewZoom,
+    gridLayout,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -249,19 +291,49 @@ export default function App() {
 
           <label className="field">
             <span className="label">
-              Розмір клітинки (px на оригіналі):{" "}
-              <strong>{cellSize}</strong>
+              Кількість бісеринок у ряду:{" "}
+              <strong>{beadsPerRow}</strong>
+              {bitmap && bitmap.width > 0 ? (
+                <span className="cell-derive">
+                  {" "}
+                  (клітинка ≈ {cellSizePx.toFixed(2)} px)
+                </span>
+              ) : null}
             </span>
             <input
               type="range"
               min={2}
-              max={80}
-              value={cellSize}
+              max={400}
+              value={beadsPerRow}
               onChange={(e) =>
-                setCellSize(Number.parseInt(e.target.value, 10))
+                setBeadsPerRow(Number.parseInt(e.target.value, 10))
               }
             />
           </label>
+
+          <div className="field">
+            <span className="label">Тип сітки схеми</span>
+            <div className="layout-toggle">
+              <label className="layout-option">
+                <input
+                  type="radio"
+                  name="gridLayout"
+                  checked={gridLayout === "brick"}
+                  onChange={() => setGridLayout("brick")}
+                />
+                Кірпич (парні ряди зміщені на півклітинки)
+              </label>
+              <label className="layout-option">
+                <input
+                  type="radio"
+                  name="gridLayout"
+                  checked={gridLayout === "straight"}
+                  onChange={() => setGridLayout("straight")}
+                />
+                Пряма (без зміщення)
+              </label>
+            </div>
+          </div>
 
           <label className="field">
             <span className="label">Колір фону (для виключення)</span>
@@ -278,10 +350,48 @@ export default function App() {
               checked={ignoreBackground}
               onChange={(e) => setIgnoreBackground(e.target.checked)}
             />
-            <span>
-              Не враховувати фон (пікселі близькі до кольору фону не входять у
-              палітру і показуються як «дірки»)
-            </span>
+            <span>Не враховувати фон</span>
+          </label>
+
+          <label className="field">
+            <span className="label">Виробник (підбір номера бісеру)</span>
+            <select
+              className="select-catalog"
+              value={beadCatalog.id}
+              onChange={(e) => setBeadCatalogId(e.target.value)}
+            >
+              {BEAD_CATALOGS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            {beadCatalog.approximateColors ? (
+              <span className="catalog-hint">
+                Номери як на{" "}
+                <a
+                  href={beadCatalog.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  ibeadsmaster
+                </a>
+                ; hex орієнтовний (за групою кольору) — перевіряйте відтінок по
+                зразку.
+              </span>
+            ) : (
+              <span className="catalog-hint">
+                RGB з відкритого CSV у{" "}
+                <a
+                  href={beadCatalog.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  beadcolors
+                </a>
+                .
+              </span>
+            )}
           </label>
 
           <label className="field">
@@ -330,7 +440,7 @@ export default function App() {
                 <canvas ref={sourceCanvasRef} className="thumb" />
               </div>
               <div className="preview-block grow">
-                <h2>Кірпічна сітка</h2>
+                <h2>Схема</h2>
                 <div className="pattern-wrap">
                   <canvas ref={patternCanvasRef} className="pattern" />
                 </div>
@@ -342,20 +452,40 @@ export default function App() {
             <section className="palette-section">
               <h2>Палітра ({palette.length})</h2>
               <ul className="palette">
-                {palette.map((c, i) => (
-                  <li key={i} className="swatch" title={`#${i + 1}`}>
-                    <span
-                      className="dot"
-                      style={{ background: rgbToCss(c) }}
-                    />
-                    <span className="idx">{i + 1}</span>
-                    <span className="hex">
-                      {c.r.toString(16).padStart(2, "0")}
-                      {c.g.toString(16).padStart(2, "0")}
-                      {c.b.toString(16).padStart(2, "0")}
-                    </span>
-                  </li>
-                ))}
+                {palette.map((c, i) => {
+                  const m = beadMatches[i];
+                  return (
+                    <li key={i} className="swatch" title={`Слот ${i + 1}`}>
+                      <span
+                        className="dot"
+                        style={{ background: rgbToCss(c) }}
+                      />
+                      <span className="idx">{i + 1}</span>
+                      <span className="hex">
+                        {formatHexWithHash(c)}
+                      </span>
+                      {m && (
+                        <span className="bead-match">
+                          <span className="bead-code" title="Найближчий номер">
+                            № {m.code}
+                          </span>
+                          <span
+                            className="bead-cat-hex"
+                            title="Колір у каталозі для підбору"
+                          >
+                            {m.beadHex}
+                          </span>
+                          {m.name ? (
+                            <span className="bead-name">{m.name}</span>
+                          ) : null}
+                          <span className="bead-de" title="ΔE (CIE76)">
+                            ΔE {m.deltaE.toFixed(1)}
+                          </span>
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           )}
@@ -409,6 +539,43 @@ export default function App() {
         .label {
           font-size: 0.88rem;
           color: #333;
+        }
+        .cell-derive {
+          font-weight: 400;
+          font-size: 0.8rem;
+          color: #666;
+        }
+        .layout-toggle {
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+        }
+        .layout-option {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.45rem;
+          font-size: 0.85rem;
+          color: #333;
+          cursor: pointer;
+        }
+        .layout-option input {
+          margin-top: 0.15rem;
+        }
+        .select-catalog {
+          width: 100%;
+          padding: 0.35rem 0.5rem;
+          border-radius: 6px;
+          border: 1px solid #a8a095;
+          font-size: 0.88rem;
+          background: #fff;
+        }
+        .catalog-hint {
+          font-size: 0.75rem;
+          color: #666;
+          line-height: 1.35;
+        }
+        .catalog-hint a {
+          color: #345;
         }
         .main {
           flex: 1;
@@ -480,12 +647,14 @@ export default function App() {
         .swatch {
           display: flex;
           align-items: center;
-          gap: 0.35rem;
+          flex-wrap: wrap;
+          gap: 0.35rem 0.5rem;
           background: #fff;
           border: 1px solid #c9c2b8;
           border-radius: 8px;
-          padding: 0.25rem 0.45rem;
+          padding: 0.35rem 0.5rem;
           font-size: 0.78rem;
+          max-width: 100%;
         }
         .dot {
           width: 22px;
@@ -501,6 +670,36 @@ export default function App() {
         .hex {
           font-family: ui-monospace, monospace;
           color: #555;
+        }
+        .bead-match {
+          display: inline-flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.35rem 0.5rem;
+          padding-left: 0.35rem;
+          border-left: 1px solid #ddd;
+          margin-left: 0.1rem;
+        }
+        .bead-code {
+          font-family: ui-monospace, monospace;
+          font-weight: 600;
+          color: #1a3a5c;
+        }
+        .bead-cat-hex {
+          font-family: ui-monospace, monospace;
+          font-size: 0.72rem;
+          color: #666;
+        }
+        .bead-name {
+          color: #555;
+          max-width: 140px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .bead-de {
+          font-size: 0.72rem;
+          color: #888;
         }
         @media (max-width: 800px) {
           .layout {

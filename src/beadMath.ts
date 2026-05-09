@@ -281,6 +281,9 @@ export type BrickCell = {
   paletteIndex: number;
 };
 
+/** «кірпич» — зміщення кожного парного ряду на півклітинки; «пряма» — прямокутна сітка. */
+export type GridLayout = "brick" | "straight";
+
 export function buildBrickGrid(
   imageData: ImageData,
   cellSize: number,
@@ -289,16 +292,19 @@ export function buildBrickGrid(
     ignoreBackground: boolean;
     background: RGB;
     bgThresholdSq: number;
+    layout?: GridLayout;
   },
 ): BrickCell[] {
   const { width: w, height: h } = imageData;
   const cells: BrickCell[] = [];
-  const cs = Math.max(2, cellSize);
+  const cs = cellSize > 0 ? cellSize : 1e-9;
+  const layout = options.layout ?? "brick";
   const paletteLabs =
     palette.length > 0 ? palette.map((p) => rgbToLab(p)) : [];
 
   for (let row = 0; row * cs < h; row++) {
-    const offset = row % 2 === 1 ? cs / 2 : 0;
+    const offset =
+      layout === "brick" && row % 2 === 1 ? cs / 2 : 0;
     let col = 0;
     while (true) {
       const left = col * cs + offset;
