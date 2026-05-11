@@ -139,6 +139,7 @@ export default function App() {
   const [backgroundHex, setBackgroundHex] = useState(DEFAULT_BG);
   const [ignoreBackground, setIgnoreBackground] = useState(true);
   const [previewZoom, setPreviewZoom] = useState(1.2);
+  const [useManufacturerPalette, setUseManufacturerPalette] = useState(false);
   const [beadCatalogId, setBeadCatalogId] = useState(
     BEAD_CATALOGS[0]?.id ?? "preciosa-ibeadsmaster",
   );
@@ -216,6 +217,14 @@ export default function App() {
     return palette.map((c) => nearestBead(c, beadCatalog));
   }, [palette, beadCatalog]);
 
+  const patternPalette = useMemo(() => {
+    if (!useManufacturerPalette) return palette;
+    return palette.map((c, i) => {
+      const m = beadMatches[i];
+      return m?.beadHex ? parseHexColor(m.beadHex) : c;
+    });
+  }, [palette, beadMatches, useManufacturerPalette]);
+
   useEffect(() => {
     const sc = sourceCanvasRef.current;
     const pc = patternCanvasRef.current;
@@ -230,7 +239,7 @@ export default function App() {
     sctx.drawImage(bitmap, 0, 0, sc.width, sc.height);
 
     const pctx = pc.getContext("2d")!;
-    paintBrickPreview(pctx, cells, cellSizePx, palette, {
+    paintBrickPreview(pctx, cells, cellSizePx, patternPalette, {
       ignoreBackground,
       zoom: previewZoom,
       pad: 6,
@@ -242,6 +251,7 @@ export default function App() {
     cells,
     cellSizePx,
     palette,
+    patternPalette,
     ignoreBackground,
     previewZoom,
     gridLayout,
@@ -394,6 +404,15 @@ export default function App() {
             )}
           </label>
 
+          <label className="field checkbox">
+            <input
+              type="checkbox"
+              checked={useManufacturerPalette}
+              onChange={(e) => setUseManufacturerPalette(e.target.checked)}
+            />
+            <span>Подивитись схему в палітрі виробника</span>
+          </label>
+
           <label className="field">
             <span className="label">
               Масштаб перегляду схеми:{" "}
@@ -433,62 +452,62 @@ export default function App() {
           {!bitmap && (
             <p className="hint">Оберіть файл зображення, щоб побачити схему.</p>
           )}
-          {bitmap && (
-            <div className="previews">
-              <div className="preview-block">
-                <h2>Оригінал</h2>
-                <canvas ref={sourceCanvasRef} className="thumb" />
-              </div>
-              <div className="preview-block grow">
-                <h2>Схема</h2>
-                <div className="pattern-wrap">
-                  <canvas ref={patternCanvasRef} className="pattern" />
+          <div className="workspace">
+            {bitmap && (
+              <div className="previews">
+                <div className="preview-block">
+                  <h2>Оригінал</h2>
+                  <canvas ref={sourceCanvasRef} className="thumb" />
+                </div>
+                <div className="preview-block grow">
+                  <h2>Схема</h2>
+                  <div className="pattern-wrap">
+                    <canvas ref={patternCanvasRef} className="pattern" />
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {palette.length > 0 && (
-            <section className="palette-section">
-              <h2>Палітра ({palette.length})</h2>
-              <ul className="palette">
-                {palette.map((c, i) => {
-                  const m = beadMatches[i];
-                  return (
-                    <li key={i} className="swatch" title={`Слот ${i + 1}`}>
-                      <span
-                        className="dot"
-                        style={{ background: rgbToCss(c) }}
-                      />
-                      <span className="idx">{i + 1}</span>
-                      <span className="hex">
-                        {formatHexWithHash(c)}
-                      </span>
-                      {m && (
-                        <span className="bead-match">
-                          <span className="bead-code" title="Найближчий номер">
-                            № {m.code}
+            {palette.length > 0 && (
+              <section className="palette-section">
+                <h2>Палітра ({palette.length})</h2>
+                <ul className="palette">
+                  {palette.map((c, i) => {
+                    const m = beadMatches[i];
+                    return (
+                      <li key={i} className="swatch" title={`Слот ${i + 1}`}>
+                        <span
+                          className="dot"
+                          style={{ background: rgbToCss(c) }}
+                        />
+                        <span className="idx">{i + 1}</span>
+                        <span className="hex">{formatHexWithHash(c)}</span>
+                        {m && (
+                          <span className="bead-match">
+                            <span className="bead-code" title="Найближчий номер">
+                              № {m.code}
+                            </span>
+                            <span
+                              className="bead-cat-hex"
+                              title="Колір у каталозі для підбору"
+                            >
+                              {m.beadHex}
+                            </span>
+                            {m.name ? (
+                              <span className="bead-name">{m.name}</span>
+                            ) : null}
+                            <span className="bead-de" title="ΔE (CIE76)">
+                              ΔE {m.deltaE.toFixed(1)}
+                            </span>
                           </span>
-                          <span
-                            className="bead-cat-hex"
-                            title="Колір у каталозі для підбору"
-                          >
-                            {m.beadHex}
-                          </span>
-                          {m.name ? (
-                            <span className="bead-name">{m.name}</span>
-                          ) : null}
-                          <span className="bead-de" title="ΔE (CIE76)">
-                            ΔE {m.deltaE.toFixed(1)}
-                          </span>
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+          </div>
         </main>
       </div>
 
@@ -581,6 +600,12 @@ export default function App() {
           flex: 1;
           min-width: 0;
         }
+        .workspace {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
+          gap: 1.25rem;
+          align-items: start;
+        }
         .hint {
           color: #555;
         }
@@ -589,6 +614,7 @@ export default function App() {
           grid-template-columns: minmax(140px, 240px) minmax(0, 1fr);
           gap: 1.25rem;
           align-items: start;
+          min-width: 0;
         }
         .preview-block {
           background: #faf8f5;
@@ -615,6 +641,7 @@ export default function App() {
         .pattern-wrap {
           overflow: auto;
           width: 100%;
+          min-width: 0;
           min-height: 48vh;
           max-height: min(78vh, 900px);
           border-radius: 6px;
@@ -630,7 +657,15 @@ export default function App() {
           line-height: 1.5;
         }
         .palette-section {
-          margin-top: 1.25rem;
+          margin-top: 0;
+          background: #faf8f5;
+          border: 1px solid #c9c2b8;
+          border-radius: 10px;
+          padding: 0.75rem 1rem 1rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+          max-height: min(78vh, 900px);
+          overflow: auto;
+          min-width: 0;
         }
         .palette-section h2 {
           font-size: 1rem;
@@ -708,6 +743,9 @@ export default function App() {
           .panel {
             flex: 1;
             width: 100%;
+          }
+          .workspace {
+            grid-template-columns: 1fr;
           }
           .previews {
             grid-template-columns: 1fr;
