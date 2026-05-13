@@ -28,6 +28,7 @@ export function loadImageToImageData(
     }
 
     ctx.drawImage(source, 0, 0);
+
     return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 

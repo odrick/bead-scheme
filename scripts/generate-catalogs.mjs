@@ -108,6 +108,7 @@ function codePerturbRgb(anchor, code) {
     const dg = (v - 0.5) * 22;
     const db = (w - 0.5) * 22;
     const [r, g, b] = anchor;
+
     return [
         clamp(r + dr, 0, 255),
         clamp(g + dg, 0, 255),
@@ -169,6 +170,7 @@ function parsePreciosaMd(mdPath) {
 async function fetchCsv(url) {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`${url} ${res.status}`);
+
     return res.text();
 }
 
@@ -191,6 +193,7 @@ function csvToCatalog(def, text) {
             hex: rgbToHex(r, g, b),
         });
     }
+
     return {
         id,
         label,

@@ -102,6 +102,7 @@ export function cardinalToWords(value: number): string {
 
     if (remainder >= 10 && remainder < 20) {
         parts.push(CARDINAL_TEENS[remainder - 10]);
+
         return parts.join(" ");
     }
 
@@ -169,5 +170,6 @@ export function pluralizeUa(
     if (abs > 10 && abs < 20) return form5;
     if (last === 1) return form1;
     if (last >= 2 && last <= 4) return form2;
+
     return form5;
 }

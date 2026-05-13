@@ -23,6 +23,7 @@ export function useImageUpload() {
             if (prev) {
                 URL.revokeObjectURL(prev);
             }
+
             return url;
         });
     }, []);
@@ -72,6 +73,7 @@ export function useImageUpload() {
     useEffect(() => {
         if (!fileUrl) {
             setBitmap(null);
+
             return;
         }
 

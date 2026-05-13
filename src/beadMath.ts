@@ -10,6 +10,7 @@ export function parseHexColor(hex: string): RGB {
         };
     }
     if (h.length !== 6) return { r: 255, g: 255, b: 255 };
+
     return {
         r: parseInt(h.slice(0, 2), 16),
         g: parseInt(h.slice(2, 4), 16),
@@ -25,6 +26,7 @@ export function colorDistanceSq(a: RGB, b: RGB): number {
     const dr = a.r - b.r;
     const dg = a.g - b.g;
     const db = a.b - b.b;
+
     return dr * dr + dg * dg + db * db;
 }
 
@@ -68,6 +70,7 @@ export function deltaE76(p: Lab, q: Lab): number {
     const dL = p.L - q.L;
     const da = p.a - q.a;
     const db = p.b - q.b;
+
     return Math.sqrt(dL * dL + da * da + db * db);
 }
 
@@ -82,6 +85,7 @@ function histKey(r: number, g: number, b: number): string {
     const qr = Math.round(r / HIST_BUCKET) * HIST_BUCKET;
     const qg = Math.round(g / HIST_BUCKET) * HIST_BUCKET;
     const qb = Math.round(b / HIST_BUCKET) * HIST_BUCKET;
+
     return `${qr},${qg},${qb}`;
 }
 
@@ -160,6 +164,7 @@ export function extractPalette(
             g: Math.round(b.sg / b.count),
             b: Math.round(b.sb / b.count),
         };
+
         return { rgb, lab: rgbToLab(rgb), count: b.count };
     });
 
@@ -260,6 +265,7 @@ function averageRect(
         }
     }
     if (n === 0) return { r: 255, g: 255, b: 255 };
+
     return {
         r: Math.round(sr / n),
         g: Math.round(sg / n),

@@ -75,6 +75,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
 
     const cellSizePx = useMemo(() => {
         if (!bitmap || bitmap.width <= 0) return 1;
+
         return bitmap.width / Math.max(2, beadsPerRow);
     }, [bitmap, beadsPerRow]);
 
@@ -117,6 +118,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
 
         return palette.map((color, index) => {
             const match = beadMatches[index];
+
             return match?.beadHex ? parseHexColor(match.beadHex) : color;
         });
     }, [palette, beadMatches, useManufacturerPalette]);

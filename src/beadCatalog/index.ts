@@ -34,6 +34,7 @@ export type PreparedBeadCatalog = Omit<RawBeadCatalog, "entries"> & {
 
 function prepare(raw: RawBeadCatalog): PreparedBeadCatalog {
     const { entries, ...rest } = raw;
+
     return {
         ...rest,
         items: entries.map((e) => ({
@@ -65,9 +66,11 @@ export function formatHexWithHash(hexOrRgb: string | RGB): string {
     if (typeof hexOrRgb === "string") {
         const t = hexOrRgb.trim();
         const body = t.startsWith("#") ? t.slice(1) : t;
+
         return `#${body.toUpperCase()}`;
     }
     const c = hexOrRgb;
+
     return `#${[c.r, c.g, c.b]
         .map((x) => x.toString(16).padStart(2, "0").toUpperCase())
         .join("")}`;
@@ -96,6 +99,7 @@ export function nearestBead(
         }
     }
     const e = catalog.items[bestI];
+
     return {
         code: e.code,
         name: e.name,

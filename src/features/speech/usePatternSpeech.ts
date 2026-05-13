@@ -74,6 +74,7 @@ export function usePatternSpeech({
                 "бісеринки",
                 "бісеринок",
             )}`;
+
             return `${beadsText} кольору ${paletteIndex + 1}.`;
         }
 
@@ -85,6 +86,7 @@ export function usePatternSpeech({
                 "клітинки",
                 "клітинок",
             )}`;
+
             return `Пропуск на ${cellsText}.`;
         }
 
@@ -125,6 +127,7 @@ export function usePatternSpeech({
 
         updateVoices();
         synth.addEventListener("voiceschanged", updateVoices);
+
         return () => synth.removeEventListener("voiceschanged", updateVoices);
     }, [speechSupported]);
 
@@ -164,6 +167,7 @@ export function usePatternSpeech({
             }
 
             setIsSpeaking(false);
+
             return;
         }
 
@@ -212,6 +216,7 @@ export function usePatternSpeech({
                 setActiveSpeechStepIndex(null);
                 setIsSpeechPaused(false);
                 setIsSpeaking(false);
+
                 return;
             }
 
@@ -240,6 +245,7 @@ export function usePatternSpeech({
                     if (nextIndex < speechSteps.length) {
                         setIsSpeechPaused(true);
                         setIsSpeaking(false);
+
                         return;
                     }
 
@@ -247,6 +253,7 @@ export function usePatternSpeech({
                     setActiveSpeechStepIndex(null);
                     setIsSpeechPaused(false);
                     setIsSpeaking(false);
+
                     return;
                 }
 
@@ -255,6 +262,7 @@ export function usePatternSpeech({
                     setActiveSpeechStepIndex(null);
                     setIsSpeechPaused(false);
                     setIsSpeaking(false);
+
                     return;
                 }
 
@@ -264,12 +272,14 @@ export function usePatternSpeech({
                 ) {
                     setIsSpeechPaused(true);
                     setIsSpeaking(false);
+
                     return;
                 }
 
                 const pauseMs = speechPauseMsRef.current;
                 if (pauseMs <= 0) {
                     speakNext();
+
                     return;
                 }
 
@@ -299,6 +309,7 @@ export function usePatternSpeech({
     const toggleSpeech = useCallback(() => {
         if (isSpeaking) {
             pauseSpeech();
+
             return;
         }
 
@@ -347,6 +358,7 @@ export function usePatternSpeech({
         };
 
         window.addEventListener("keydown", onKeyDown);
+
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [hasPattern, toggleSpeech]);
 

@@ -22,6 +22,7 @@ export function PaletteSection({ palette, beadMatches }: PaletteSectionProps) {
             <ul className="palette">
                 {palette.map((color, index) => {
                     const match = beadMatches[index];
+
                     return (
                         <li
                             key={index}
