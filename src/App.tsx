@@ -112,6 +112,7 @@ export default function App() {
                 <PaletteSection
                     palette={patternModel.palette}
                     beadMatches={patternModel.beadMatches}
+                    beadCounts={patternModel.beadCountsByPalette}
                 />
             </div>
 

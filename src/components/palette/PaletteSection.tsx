@@ -4,9 +4,14 @@ import { rgbToCss, type RGB } from "../../beadMath";
 type PaletteSectionProps = {
     palette: RGB[];
     beadMatches: { code: string }[];
+    beadCounts: number[];
 };
 
-export function PaletteSection({ palette, beadMatches }: PaletteSectionProps) {
+export function PaletteSection({
+    palette,
+    beadMatches,
+    beadCounts,
+}: PaletteSectionProps) {
     if (palette.length === 0) return null;
 
     return (
@@ -20,7 +25,7 @@ export function PaletteSection({ palette, beadMatches }: PaletteSectionProps) {
                         <li
                             key={index}
                             className="swatch"
-                            title={`Слот ${index + 1}`}
+                            title={`Слот ${index + 1}, ${beadCounts[index] ?? 0} бісеринок`}
                         >
                             <span
                                 className="dot"
@@ -30,9 +35,10 @@ export function PaletteSection({ palette, beadMatches }: PaletteSectionProps) {
                             <span className="hex">
                                 {formatHexWithHash(color)}
                             </span>
-                            {match ? (
-                                <span className="bead-code">{match.code}</span>
-                            ) : null}
+                            <span className="bead-code">
+                                {match ? `${match.code} ` : ""}(
+                                {beadCounts[index] ?? 0})
+                            </span>
                         </li>
                     );
                 })}

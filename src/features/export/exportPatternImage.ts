@@ -1,5 +1,6 @@
 import type { PreparedBeadCatalog } from "../../beadCatalog";
 import {
+    countBeadsByPaletteIndex,
     rgbToCss,
     type BrickCell,
     type GridLayout,
@@ -92,20 +93,6 @@ function schemeExportZoom(
     );
 
     return EXPORT_LAYOUT.schemeTargetPx / maxSide;
-}
-
-function countBeadsByPaletteIndex(
-    cells: BrickCell[],
-    paletteLength: number,
-): number[] {
-    const counts = new Array<number>(paletteLength).fill(0);
-
-    for (const cell of cells) {
-        if (cell.paletteIndex < 0 || cell.paletteIndex >= paletteLength) continue;
-        counts[cell.paletteIndex] += 1;
-    }
-
-    return counts;
 }
 
 type PaletteLegendMetrics = {

@@ -281,6 +281,20 @@ export type BrickCell = {
     paletteIndex: number;
 };
 
+export function countBeadsByPaletteIndex(
+    cells: BrickCell[],
+    paletteLength: number,
+): number[] {
+    const counts = new Array<number>(paletteLength).fill(0);
+
+    for (const cell of cells) {
+        if (cell.paletteIndex < 0 || cell.paletteIndex >= paletteLength) continue;
+        counts[cell.paletteIndex] += 1;
+    }
+
+    return counts;
+}
+
 /** «кірпич» — зміщення кожного парного ряду на півклітинки; «пряма» — прямокутна сітка; «ажурна» — та сама пряма, повернута на 45°. */
 export type GridLayout = "brick" | "straight" | "lace";
 

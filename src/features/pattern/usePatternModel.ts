@@ -7,6 +7,7 @@ import {
 } from "../../beadCatalog";
 import {
     buildBrickGrid,
+    countBeadsByPaletteIndex,
     extractPalette,
     parseHexColor,
     type BrickCell,
@@ -56,6 +57,7 @@ type PatternModel = {
     patternPalette: RGB[];
     hasPattern: boolean;
     beadCount: number;
+    beadCountsByPalette: number[];
 };
 
 export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
@@ -148,6 +150,11 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         [cells],
     );
 
+    const beadCountsByPalette = useMemo(
+        () => countBeadsByPaletteIndex(cells, palette.length),
+        [cells, palette.length],
+    );
+
     return {
         paletteSize,
         setPaletteSize,
@@ -176,5 +183,6 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         patternPalette,
         hasPattern,
         beadCount,
+        beadCountsByPalette,
     };
 }
