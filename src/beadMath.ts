@@ -281,8 +281,138 @@ export type BrickCell = {
     paletteIndex: number;
 };
 
-/** «кірпич» — зміщення кожного парного ряду на півклітинки; «пряма» — прямокутна сітка. */
-export type GridLayout = "brick" | "straight";
+/** «кірпич» — зміщення кожного парного ряду на півклітинки; «пряма» — прямокутна сітка; «ажурна» — та сама пряма, повернута на 45°. */
+export type GridLayout = "brick" | "straight" | "lace";
+
+const COS45 = Math.SQRT1_2;
+const SIN45 = Math.SQRT1_2;
+
+function straightGridCenter(
+    row: number,
+    col: number,
+    cellSize: number,
+): { gx: number; gy: number } {
+    return {
+        gx: col * cellSize + cellSize / 2,
+        gy: row * cellSize + cellSize / 2,
+    };
+}
+
+/** Структурна «дірка» ажурної сітки: непарний ряд, кожна друга клітинка. */
+export function isLaceStructuralHole(row: number, col: number): boolean {
+    return (row & 1) === 1 && (col & 1) === 1;
+}
+
+/** Центр клітинки прямої сітки, повернутої на 45° навколо (originX, originY). */
+export function laceGridCellCenter(
+    row: number,
+    col: number,
+    cellSize: number,
+    originX: number,
+    originY: number,
+): { x: number; y: number } {
+    const { gx, gy } = straightGridCenter(row, col, cellSize);
+    const dx = gx - originX;
+    const dy = gy - originY;
+
+    return {
+        x: originX + dx * COS45 - dy * SIN45,
+        y: originY + dx * SIN45 + dy * COS45,
+    };
+}
+
+function rotatedSquareIntersectsImage(
+    cx: number,
+    cy: number,
+    size: number,
+    width: number,
+    height: number,
+): boolean {
+    const half = size / 2;
+    const ext = half * (Math.abs(COS45) + Math.abs(SIN45));
+
+    return cx + ext >= 0 && cx - ext < width && cy + ext >= 0 && cy - ext < height;
+}
+
+function averageRotatedSquare(
+    imageData: ImageData,
+    cx: number,
+    cy: number,
+    size: number,
+): RGB {
+    const { width, height, data: buf } = imageData;
+    const half = size / 2;
+    const cos = COS45;
+    const sin = -SIN45;
+    const ext = half * (Math.abs(COS45) + Math.abs(SIN45));
+    const x0 = Math.max(0, Math.floor(cx - ext));
+    const x1 = Math.min(width, Math.ceil(cx + ext));
+    const y0 = Math.max(0, Math.floor(cy - ext));
+    const y1 = Math.min(height, Math.ceil(cy + ext));
+
+    let sr = 0;
+    let sg = 0;
+    let sb = 0;
+    let n = 0;
+
+    for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+            const lx = x - cx;
+            const ly = y - cy;
+            const gx = lx * cos - ly * sin;
+            const gy = lx * sin + ly * cos;
+            if (Math.abs(gx) > half || Math.abs(gy) > half) continue;
+
+            const i = (y * width + x) * 4;
+            const a = buf[i + 3];
+            if (a < 128) continue;
+            sr += buf[i];
+            sg += buf[i + 1];
+            sb += buf[i + 2];
+            n += 1;
+        }
+    }
+
+    if (n === 0) return { r: 255, g: 255, b: 255 };
+
+    return {
+        r: Math.round(sr / n),
+        g: Math.round(sg / n),
+        b: Math.round(sb / n),
+    };
+}
+
+function paletteIndexForAverage(
+    avg: RGB,
+    palette: RGB[],
+    paletteLabs: Lab[],
+    options: {
+        ignoreBackground: boolean;
+        background: RGB;
+        bgThresholdSq: number;
+    },
+): number {
+    if (
+        options.ignoreBackground &&
+        isBackground(avg, options.background, options.bgThresholdSq)
+    ) {
+        return -1;
+    }
+    if (palette.length === 0) return -1;
+
+    const labAvg = rgbToLab(avg);
+    let best = 0;
+    let bestD = deltaE76(labAvg, paletteLabs[0]);
+    for (let p = 1; p < palette.length; p++) {
+        const d = deltaE76(labAvg, paletteLabs[p]);
+        if (d < bestD) {
+            bestD = d;
+            best = p;
+        }
+    }
+
+    return best;
+}
 
 export function buildBrickGrid(
     imageData: ImageData,
@@ -302,6 +432,47 @@ export function buildBrickGrid(
     const paletteLabs =
         palette.length > 0 ? palette.map((p) => rgbToLab(p)) : [];
 
+    if (layout === "lace") {
+        const originX = w / 2;
+        const originY = h / 2;
+        const span = Math.ceil(Math.hypot(w, h) / cs) + 2;
+
+        for (let row = -span; row <= span; row++) {
+            for (let col = -span; col <= span; col++) {
+                const { x: rcx, y: rcy } = laceGridCellCenter(
+                    row,
+                    col,
+                    cs,
+                    originX,
+                    originY,
+                );
+                if (!rotatedSquareIntersectsImage(rcx, rcy, cs, w, h)) continue;
+
+                if (isLaceStructuralHole(row, col)) {
+                    cells.push({
+                        row,
+                        col,
+                        avg: { r: 255, g: 255, b: 255 },
+                        paletteIndex: -1,
+                    });
+                    continue;
+                }
+
+                const avg = averageRotatedSquare(imageData, rcx, rcy, cs);
+                const paletteIndex = paletteIndexForAverage(
+                    avg,
+                    palette,
+                    paletteLabs,
+                    options,
+                );
+
+                cells.push({ row, col, avg, paletteIndex });
+            }
+        }
+
+        return cells;
+    }
+
     for (let row = 0; row * cs < h; row++) {
         const offset = layout === "brick" && row % 2 === 1 ? cs / 2 : 0;
         let col = 0;
@@ -314,28 +485,12 @@ export function buildBrickGrid(
             if (cw <= 0 || ch <= 0) break;
 
             const avg = averageRect(imageData, left, top, cw, ch);
-            let paletteIndex = -1;
-
-            if (
-                options.ignoreBackground &&
-                isBackground(avg, options.background, options.bgThresholdSq)
-            ) {
-                paletteIndex = -1;
-            } else if (palette.length === 0) {
-                paletteIndex = -1;
-            } else {
-                const labAvg = rgbToLab(avg);
-                let best = 0;
-                let bestD = deltaE76(labAvg, paletteLabs[0]);
-                for (let p = 1; p < palette.length; p++) {
-                    const d = deltaE76(labAvg, paletteLabs[p]);
-                    if (d < bestD) {
-                        bestD = d;
-                        best = p;
-                    }
-                }
-                paletteIndex = best;
-            }
+            const paletteIndex = paletteIndexForAverage(
+                avg,
+                palette,
+                paletteLabs,
+                options,
+            );
 
             cells.push({ row, col, avg, paletteIndex });
             col += 1;

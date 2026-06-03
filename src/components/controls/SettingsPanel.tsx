@@ -138,6 +138,15 @@ export function SettingsPanel({
                         />
                         Пряма
                     </label>
+                    <label className="layout-option">
+                        <input
+                            type="radio"
+                            name="gridLayout"
+                            checked={gridLayout === "lace"}
+                            onChange={() => onGridLayoutChange("lace")}
+                        />
+                        Ажурна
+                    </label>
                 </div>
             </div>
 
