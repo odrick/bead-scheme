@@ -347,22 +347,21 @@ input[type="range"]::-moz-range-thumb {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
     gap: 0.55rem;
 }
 
 .swatch {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
     gap: 0.35rem 0.5rem;
+    min-width: 0;
     background: rgba(2, 6, 23, 0.45);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
     padding: 0.45rem 0.55rem;
     font-size: 0.78rem;
-    max-width: 100%;
 }
 
 .dot {
@@ -381,43 +380,23 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .hex {
+    flex-shrink: 0;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     color: rgba(226, 232, 240, 0.62);
-}
-
-.bead-match {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem 0.5rem;
-    padding-left: 0.45rem;
-    border-left: 1px solid rgba(148, 163, 184, 0.16);
-    margin-left: 0.05rem;
 }
 
 .bead-code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-weight: 800;
-    color: rgba(255, 255, 255, 0.86);
-}
-
-.bead-cat-hex {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 0.72rem;
-    color: rgba(226, 232, 240, 0.62);
-}
-
-.bead-name {
-    color: rgba(226, 232, 240, 0.68);
-    max-width: 160px;
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.bead-de {
-    font-size: 0.72rem;
-    color: rgba(226, 232, 240, 0.5);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.86);
+    padding-left: 0.45rem;
+    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    margin-left: 0.05rem;
 }
 
 @media (max-width: 800px) {

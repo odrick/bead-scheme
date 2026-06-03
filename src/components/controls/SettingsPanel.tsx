@@ -1,6 +1,12 @@
 import type { DragEventHandler, RefObject } from "react";
 import { type PreparedBeadCatalog } from "../../beadCatalog";
 import type { GridLayout } from "../../beadMath";
+import type { CanvasBackground } from "../../features/preview/canvasUtils";
+import {
+    PREVIEW_ZOOM_MAX,
+    PREVIEW_ZOOM_MIN,
+    PREVIEW_ZOOM_STEP,
+} from "../../features/preview/previewZoom";
 
 type SettingsPanelProps = {
     fileInputRef: RefObject<HTMLInputElement | null>;
@@ -26,6 +32,8 @@ type SettingsPanelProps = {
     onUseManufacturerPaletteChange: (value: boolean) => void;
     previewZoom: number;
     onPreviewZoomChange: (value: number) => void;
+    canvasBackground: CanvasBackground;
+    onCanvasBackgroundChange: (value: CanvasBackground) => void;
     beadCount: number;
     totalCells: number;
 };
@@ -54,6 +62,8 @@ export function SettingsPanel({
     onUseManufacturerPaletteChange,
     previewZoom,
     onPreviewZoomChange,
+    canvasBackground,
+    onCanvasBackgroundChange,
     beadCount,
     totalCells,
 }: SettingsPanelProps) {
@@ -213,6 +223,41 @@ export function SettingsPanel({
                 <span>В палітрі виробника</span>
             </label>
 
+            <div className="field">
+                <span className="label">Фон канвасу схеми</span>
+                <div className="layout-toggle">
+                    <label className="layout-option">
+                        <input
+                            type="radio"
+                            name="canvasBackground"
+                            checked={canvasBackground === "checkerboard"}
+                            onChange={() =>
+                                onCanvasBackgroundChange("checkerboard")
+                            }
+                        />
+                        Шахматка
+                    </label>
+                    <label className="layout-option">
+                        <input
+                            type="radio"
+                            name="canvasBackground"
+                            checked={canvasBackground === "white"}
+                            onChange={() => onCanvasBackgroundChange("white")}
+                        />
+                        Білий
+                    </label>
+                    <label className="layout-option">
+                        <input
+                            type="radio"
+                            name="canvasBackground"
+                            checked={canvasBackground === "black"}
+                            onChange={() => onCanvasBackgroundChange("black")}
+                        />
+                        Чорний
+                    </label>
+                </div>
+            </div>
+
             <label className="field">
                 <span className="label">
                     Масштаб перегляду схеми:{" "}
@@ -225,9 +270,9 @@ export function SettingsPanel({
                 </span>
                 <input
                     type="range"
-                    min={0.01}
-                    max={3}
-                    step={0.05}
+                    min={PREVIEW_ZOOM_MIN}
+                    max={PREVIEW_ZOOM_MAX}
+                    step={PREVIEW_ZOOM_STEP}
                     value={previewZoom}
                     onChange={(event) =>
                         onPreviewZoomChange(

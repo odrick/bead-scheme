@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { PREVIEW_ZOOM_STEP } from "../../features/preview/previewZoom";
 import type { BrickCell, GridLayout, RGB } from "../../beadMath";
 import {
     paintBrickPreview,
+    type CanvasBackground,
     type PaintBrickPreviewOptions,
 } from "../../features/preview/canvasUtils";
 
@@ -10,9 +12,10 @@ type PatternPreviewProps = {
     cells: BrickCell[];
     cellSizePx: number;
     patternPalette: RGB[];
-    ignoreBackground: boolean;
     previewZoom: number;
+    onPreviewZoomChange: Dispatch<SetStateAction<number>>;
     gridLayout: GridLayout;
+    canvasBackground: CanvasBackground;
 };
 
 export function PatternPreview({
@@ -20,11 +23,32 @@ export function PatternPreview({
     cells,
     cellSizePx,
     patternPalette,
-    ignoreBackground,
     previewZoom,
+    onPreviewZoomChange,
     gridLayout,
+    canvasBackground,
 }: PatternPreviewProps) {
     const patternCanvasRef = useRef<HTMLCanvasElement>(null);
+    const patternWrapRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const wrap = patternWrapRef.current;
+        if (!wrap || !bitmap) return;
+
+        const onWheel = (event: WheelEvent) => {
+            if (!event.ctrlKey && !event.metaKey) return;
+
+            event.preventDefault();
+            const direction = event.deltaY < 0 ? 1 : -1;
+
+            onPreviewZoomChange(
+                (zoom) => zoom + direction * PREVIEW_ZOOM_STEP,
+            );
+        };
+
+        wrap.addEventListener("wheel", onWheel, { passive: false });
+        return () => wrap.removeEventListener("wheel", onWheel);
+    }, [bitmap, onPreviewZoomChange]);
 
     useEffect(() => {
         const canvas = patternCanvasRef.current;
@@ -34,11 +58,10 @@ export function PatternPreview({
         if (!ctx) return;
 
         const options: PaintBrickPreviewOptions = {
-            ignoreBackground,
             zoom: previewZoom,
             pad: 6,
-            showEmptyAsTransparent: true,
             layout: gridLayout,
+            canvasBackground,
         };
 
         paintBrickPreview(ctx, cells, cellSizePx, patternPalette, options);
@@ -47,16 +70,16 @@ export function PatternPreview({
         cells,
         cellSizePx,
         patternPalette,
-        ignoreBackground,
         previewZoom,
         gridLayout,
+        canvasBackground,
     ]);
 
     return (
         <section className="preview-block preview-scheme">
             <h2>Схема</h2>
 
-            <div className="pattern-wrap">
+            <div ref={patternWrapRef} className="pattern-wrap">
                 <canvas ref={patternCanvasRef} className="pattern" />
             </div>
         </section>

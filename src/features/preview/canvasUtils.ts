@@ -5,12 +5,13 @@ import {
     type GridLayout,
     type RGB,
 } from "../../beadMath";
+export type CanvasBackground = "checkerboard" | "white" | "black";
+
 export type PaintBrickPreviewOptions = {
-    ignoreBackground: boolean;
     zoom: number;
     pad: number;
-    showEmptyAsTransparent: boolean;
     layout: GridLayout;
+    canvasBackground: CanvasBackground;
 };
 
 export function loadImageToImageData(
@@ -58,6 +59,23 @@ export function drawCheckerboard(
     ctx.restore();
 }
 
+export function drawCanvasBackground(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    background: CanvasBackground,
+): void {
+    if (background === "checkerboard") {
+        drawCheckerboard(ctx, x, y, w, h, "#f0f0f0", "#d8d8d8", 8);
+        return;
+    }
+
+    ctx.fillStyle = background === "white" ? "#ffffff" : "#000000";
+    ctx.fillRect(x, y, w, h);
+}
+
 export function paintBrickPreview(
     ctx: CanvasRenderingContext2D,
     cells: BrickCell[],
@@ -65,8 +83,7 @@ export function paintBrickPreview(
     palette: RGB[],
     options: PaintBrickPreviewOptions,
 ): void {
-    const { zoom, pad, ignoreBackground, showEmptyAsTransparent, layout } =
-        options;
+    const { zoom, pad, layout, canvasBackground } = options;
     const cs = cellSize * zoom;
     const radius = cs * 0.48;
 
@@ -131,15 +148,13 @@ export function paintBrickPreview(
     ctx.canvas.width = Math.max(1, Math.ceil(canvasWidth));
     ctx.canvas.height = Math.max(1, Math.ceil(canvasHeight));
 
-    drawCheckerboard(
+    drawCanvasBackground(
         ctx,
         0,
         0,
         ctx.canvas.width,
         ctx.canvas.height,
-        "#f0f0f0",
-        "#d8d8d8",
-        8,
+        canvasBackground,
     );
 
     for (const cell of cells) {
@@ -162,26 +177,7 @@ export function paintBrickPreview(
             cy = pad + cell.row * cs + cs / 2;
         }
 
-        if (cell.paletteIndex < 0) {
-            if (showEmptyAsTransparent && ignoreBackground) {
-                drawCheckerboard(
-                    ctx,
-                    cx - radius,
-                    cy - radius,
-                    radius * 2,
-                    radius * 2,
-                    "#e8e8e8",
-                    "#c8c8c8",
-                    4,
-                );
-                ctx.strokeStyle = "rgba(0,0,0,0.12)";
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-                ctx.stroke();
-            }
-            continue;
-        }
+        if (cell.paletteIndex < 0) continue;
 
         const color = palette[cell.paletteIndex];
 

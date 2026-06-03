@@ -1,16 +1,9 @@
 import { formatHexWithHash } from "../../beadCatalog";
 import { rgbToCss, type RGB } from "../../beadMath";
 
-type PaletteMatch = {
-    code: string;
-    name?: string;
-    beadHex: string;
-    deltaE: number;
-};
-
 type PaletteSectionProps = {
     palette: RGB[];
-    beadMatches: PaletteMatch[];
+    beadMatches: { code: string }[];
 };
 
 export function PaletteSection({ palette, beadMatches }: PaletteSectionProps) {
@@ -37,33 +30,9 @@ export function PaletteSection({ palette, beadMatches }: PaletteSectionProps) {
                             <span className="hex">
                                 {formatHexWithHash(color)}
                             </span>
-                            {match && (
-                                <span className="bead-match">
-                                    <span
-                                        className="bead-code"
-                                        title="Найближчий номер"
-                                    >
-                                        № {match.code}
-                                    </span>
-                                    <span
-                                        className="bead-cat-hex"
-                                        title="Колір у каталозі для підбору"
-                                    >
-                                        {match.beadHex}
-                                    </span>
-                                    {match.name ? (
-                                        <span className="bead-name">
-                                            {match.name}
-                                        </span>
-                                    ) : null}
-                                    <span
-                                        className="bead-de"
-                                        title="ΔE (CIE76)"
-                                    >
-                                        ΔE {match.deltaE.toFixed(1)}
-                                    </span>
-                                </span>
-                            )}
+                            {match ? (
+                                <span className="bead-code">{match.code}</span>
+                            ) : null}
                         </li>
                     );
                 })}

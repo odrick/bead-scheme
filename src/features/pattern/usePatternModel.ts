@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import {
     BEAD_CATALOGS,
     nearestBead,
@@ -12,7 +13,11 @@ import {
     type GridLayout,
     type RGB,
 } from "../../beadMath";
-import { loadImageToImageData } from "../preview/canvasUtils";
+import {
+    loadImageToImageData,
+    type CanvasBackground,
+} from "../preview/canvasUtils";
+import { clampPreviewZoom } from "../preview/previewZoom";
 
 const DEFAULT_BG = "#ffffff";
 const BG_MATCH_SQ = 55 * 55;
@@ -35,7 +40,9 @@ type PatternModel = {
     ignoreBackground: boolean;
     setIgnoreBackground: (value: boolean) => void;
     previewZoom: number;
-    setPreviewZoom: (value: number) => void;
+    setPreviewZoom: Dispatch<SetStateAction<number>>;
+    canvasBackground: CanvasBackground;
+    setCanvasBackground: (value: CanvasBackground) => void;
     useManufacturerPalette: boolean;
     setUseManufacturerPalette: (value: boolean) => void;
     beadCatalogId: string;
@@ -57,7 +64,15 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
     const [gridLayout, setGridLayout] = useState<GridLayout>("brick");
     const [backgroundHex, setBackgroundHex] = useState(DEFAULT_BG);
     const [ignoreBackground, setIgnoreBackground] = useState(true);
-    const [previewZoom, setPreviewZoom] = useState(1.2);
+    const [previewZoom, setPreviewZoomState] = useState(1.2);
+    const setPreviewZoom = useCallback((value: SetStateAction<number>) => {
+        setPreviewZoomState((prev) => {
+            const next = typeof value === "function" ? value(prev) : value;
+            return clampPreviewZoom(next);
+        });
+    }, []);
+    const [canvasBackground, setCanvasBackground] =
+        useState<CanvasBackground>("checkerboard");
     const [useManufacturerPalette, setUseManufacturerPalette] = useState(false);
     const [beadCatalogId, setBeadCatalogId] = useState(DEFAULT_CATALOG.id);
 
@@ -146,6 +161,8 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         setIgnoreBackground,
         previewZoom,
         setPreviewZoom,
+        canvasBackground,
+        setCanvasBackground,
         useManufacturerPalette,
         setUseManufacturerPalette,
         beadCatalogId,

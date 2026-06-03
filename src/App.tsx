@@ -45,6 +45,10 @@ export default function App() {
                         }
                         previewZoom={patternModel.previewZoom}
                         onPreviewZoomChange={patternModel.setPreviewZoom}
+                        canvasBackground={patternModel.canvasBackground}
+                        onCanvasBackgroundChange={
+                            patternModel.setCanvasBackground
+                        }
                         beadCount={patternModel.beadCount}
                         totalCells={patternModel.cells.length}
                     />
@@ -62,9 +66,10 @@ export default function App() {
                         cells={patternModel.cells}
                         cellSizePx={patternModel.cellSizePx}
                         patternPalette={patternModel.patternPalette}
-                        ignoreBackground={patternModel.ignoreBackground}
                         previewZoom={patternModel.previewZoom}
+                        onPreviewZoomChange={patternModel.setPreviewZoom}
                         gridLayout={patternModel.gridLayout}
+                        canvasBackground={patternModel.canvasBackground}
                     />
                 </div>
 
