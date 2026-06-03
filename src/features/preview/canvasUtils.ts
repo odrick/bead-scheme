@@ -4,15 +4,12 @@ import {
     type GridLayout,
     type RGB,
 } from "../../beadMath";
-import type { SpeechHighlight } from "../speech/speechSequence";
-
 export type PaintBrickPreviewOptions = {
     ignoreBackground: boolean;
     zoom: number;
     pad: number;
     showEmptyAsTransparent: boolean;
     layout: GridLayout;
-    activeHighlight?: SpeechHighlight | null;
 };
 
 export function loadImageToImageData(
@@ -67,14 +64,8 @@ export function paintBrickPreview(
     palette: RGB[],
     options: PaintBrickPreviewOptions,
 ): void {
-    const {
-        zoom,
-        pad,
-        ignoreBackground,
-        showEmptyAsTransparent,
-        layout,
-        activeHighlight = null,
-    } = options;
+    const { zoom, pad, ignoreBackground, showEmptyAsTransparent, layout } =
+        options;
     const cs = cellSize * zoom;
     const radius = cs * 0.48;
 
@@ -133,16 +124,7 @@ export function paintBrickPreview(
         }
 
         const color = palette[cell.paletteIndex];
-        const isActive =
-            activeHighlight !== null &&
-            cell.row === activeHighlight.row &&
-            cell.col >= activeHighlight.fromCol &&
-            cell.col <= activeHighlight.toCol;
 
-        ctx.save();
-        if (activeHighlight !== null && !isActive) {
-            ctx.globalAlpha = 0.35;
-        }
         ctx.fillStyle = rgbToCss(color);
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -150,25 +132,5 @@ export function paintBrickPreview(
         ctx.strokeStyle = "rgba(0,0,0,0.2)";
         ctx.lineWidth = Math.max(0.5, zoom * 0.35);
         ctx.stroke();
-        ctx.restore();
-
-        if (isActive) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius + Math.max(1.5, cs * 0.08), 0, Math.PI * 2);
-            ctx.strokeStyle = "rgba(255, 222, 89, 0.95)";
-            ctx.lineWidth = Math.max(1.5, zoom * 1.15);
-            ctx.shadowColor = "rgba(255, 222, 89, 0.7)";
-            ctx.shadowBlur = Math.max(8, cs * 0.55);
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius + Math.max(0.5, cs * 0.03), 0, Math.PI * 2);
-            ctx.strokeStyle = "rgba(255,255,255,0.95)";
-            ctx.lineWidth = Math.max(1, zoom * 0.7);
-            ctx.shadowBlur = 0;
-            ctx.stroke();
-            ctx.restore();
-        }
     }
 }

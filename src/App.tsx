@@ -6,15 +6,10 @@ import { OriginalImagePreview } from "./components/preview/OriginalImagePreview"
 import { PatternPreview } from "./components/preview/PatternPreview";
 import { useImageUpload } from "./features/image/useImageUpload";
 import { usePatternModel } from "./features/pattern/usePatternModel";
-import { usePatternSpeech } from "./features/speech/usePatternSpeech";
 
 export default function App() {
     const imageUpload = useImageUpload();
     const patternModel = usePatternModel(imageUpload.bitmap);
-    const speech = usePatternSpeech({
-        cells: patternModel.cells,
-        hasPattern: patternModel.hasPattern,
-    });
 
     return (
         <div className="app">
@@ -64,22 +59,12 @@ export default function App() {
 
                     <PatternPreview
                         bitmap={imageUpload.bitmap}
-                        hasPattern={patternModel.hasPattern}
                         cells={patternModel.cells}
                         cellSizePx={patternModel.cellSizePx}
                         patternPalette={patternModel.patternPalette}
                         ignoreBackground={patternModel.ignoreBackground}
                         previewZoom={patternModel.previewZoom}
                         gridLayout={patternModel.gridLayout}
-                        activeSpeechHighlight={speech.activeSpeechHighlight}
-                        isSpeaking={speech.isSpeaking}
-                        speechSupported={speech.speechSupported}
-                        toggleSpeech={speech.toggleSpeech}
-                        speechPauseMs={speech.speechPauseMs}
-                        setSpeechPauseMs={speech.setSpeechPauseMs}
-                        speechAutoPause={speech.speechAutoPause}
-                        setSpeechAutoPause={speech.setSpeechAutoPause}
-                        currentSpeechStatusText={speech.currentSpeechStatusText}
                     />
                 </div>
 
