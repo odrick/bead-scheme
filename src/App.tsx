@@ -1,15 +1,47 @@
+import { useCallback, useState } from "react";
 import "./App.css";
 import { BEAD_CATALOGS } from "./beadCatalog";
+import { ExportDialog } from "./components/export/ExportDialog";
 import { SettingsPanel } from "./components/controls/SettingsPanel";
 import { PaletteSection } from "./components/palette/PaletteSection";
 import { OriginalImagePreview } from "./components/preview/OriginalImagePreview";
 import { PatternPreview } from "./components/preview/PatternPreview";
+import {
+    downloadCanvasAsPng,
+    exportFilenameForCatalog,
+    renderPatternExport,
+} from "./features/export/exportPatternImage";
 import { useImageUpload } from "./features/image/useImageUpload";
 import { usePatternModel } from "./features/pattern/usePatternModel";
 
 export default function App() {
     const imageUpload = useImageUpload();
     const patternModel = usePatternModel(imageUpload.bitmap);
+    const [exportDialogOpen, setExportDialogOpen] = useState(false);
+
+    const handleExportConfirm = useCallback(
+        (labelPaletteIndices: boolean) => {
+            setExportDialogOpen(false);
+            if (!patternModel.hasPattern) return;
+
+            const canvas = renderPatternExport({
+                cells: patternModel.cells,
+                cellSizePx: patternModel.cellSizePx,
+                patternPalette: patternModel.patternPalette,
+                beadMatches: patternModel.beadMatches,
+                manufacturerLabel: patternModel.beadCatalog.label,
+                gridLayout: patternModel.gridLayout,
+                canvasBackground: patternModel.canvasBackground,
+                labelPaletteIndices,
+            });
+
+            downloadCanvasAsPng(
+                canvas,
+                exportFilenameForCatalog(patternModel.beadCatalog),
+            );
+        },
+        [patternModel],
+    );
 
     return (
         <div className="app">
@@ -51,6 +83,10 @@ export default function App() {
                         }
                         beadCount={patternModel.beadCount}
                         totalCells={patternModel.cells.length}
+                        canExport={
+                            patternModel.hasPattern && !!imageUpload.bitmap
+                        }
+                        onExport={() => setExportDialogOpen(true)}
                     />
 
                     <OriginalImagePreview
@@ -78,6 +114,12 @@ export default function App() {
                     beadMatches={patternModel.beadMatches}
                 />
             </div>
+
+            <ExportDialog
+                open={exportDialogOpen}
+                onConfirm={handleExportConfirm}
+                onCancel={() => setExportDialogOpen(false)}
+            />
         </div>
     );
 }

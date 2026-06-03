@@ -12,7 +12,185 @@ export type PaintBrickPreviewOptions = {
     pad: number;
     layout: GridLayout;
     canvasBackground: CanvasBackground;
+    labelPaletteIndices?: boolean;
 };
+
+export type BrickLayoutMetrics = {
+    canvasWidth: number;
+    canvasHeight: number;
+    cs: number;
+    radius: number;
+    pad: number;
+    layout: GridLayout;
+    laceOriginX: number;
+    laceOriginY: number;
+    laceOffsetX: number;
+    laceOffsetY: number;
+};
+
+export function contrastingTextColor(c: RGB): "#000000" | "#ffffff" {
+    const luminance = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+    return luminance > 0.55 ? "#000000" : "#ffffff";
+}
+
+export function computeBrickLayout(
+    cells: BrickCell[],
+    cellSize: number,
+    zoom: number,
+    pad: number,
+    layout: GridLayout,
+): BrickLayoutMetrics {
+    const cs = cellSize * zoom;
+    const radius = cs * 0.48;
+
+    let maxCol = 0;
+    for (const cell of cells) {
+        maxCol = Math.max(maxCol, cell.col);
+    }
+
+    const rows =
+        cells.length === 0 ? 0 : Math.max(...cells.map((cell) => cell.row)) + 1;
+
+    let canvasWidth: number;
+    let canvasHeight: number;
+    let laceOriginX = 0;
+    let laceOriginY = 0;
+    let laceOffsetX = pad;
+    let laceOffsetY = pad;
+
+    if (layout === "lace" && cells.length > 0) {
+        let minRow = Infinity;
+        let maxRow = -Infinity;
+        let minCol = Infinity;
+        let maxColLace = -Infinity;
+        for (const cell of cells) {
+            minRow = Math.min(minRow, cell.row);
+            maxRow = Math.max(maxRow, cell.row);
+            minCol = Math.min(minCol, cell.col);
+            maxColLace = Math.max(maxColLace, cell.col);
+        }
+        laceOriginX = ((minCol + maxColLace) / 2 + 0.5) * cs;
+        laceOriginY = ((minRow + maxRow) / 2 + 0.5) * cs;
+
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (const cell of cells) {
+            const { x, y } = laceGridCellCenter(
+                cell.row,
+                cell.col,
+                cs,
+                laceOriginX,
+                laceOriginY,
+            );
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
+        laceOffsetX = pad - minX;
+        laceOffsetY = pad - minY;
+        canvasWidth = pad * 2 + (maxX - minX);
+        canvasHeight = pad * 2 + (maxY - minY);
+    } else {
+        canvasWidth =
+            layout === "brick"
+                ? pad * 2 + (maxCol + 1) * cs + cs / 2
+                : pad * 2 + (maxCol + 1) * cs;
+        canvasHeight = pad * 2 + rows * cellSize * zoom;
+    }
+
+    return {
+        canvasWidth,
+        canvasHeight,
+        cs,
+        radius,
+        pad,
+        layout,
+        laceOriginX,
+        laceOriginY,
+        laceOffsetX,
+        laceOffsetY,
+    };
+}
+
+export function getBrickCellCenter(
+    cell: BrickCell,
+    metrics: BrickLayoutMetrics,
+): { cx: number; cy: number } {
+    const {
+        cs,
+        pad,
+        layout,
+        laceOriginX,
+        laceOriginY,
+        laceOffsetX,
+        laceOffsetY,
+    } = metrics;
+
+    if (layout === "lace") {
+        const center = laceGridCellCenter(
+            cell.row,
+            cell.col,
+            cs,
+            laceOriginX,
+            laceOriginY,
+        );
+        return {
+            cx: center.x + laceOffsetX,
+            cy: center.y + laceOffsetY,
+        };
+    }
+
+    const ox = (layout === "brick" && cell.row % 2 === 1 ? cs / 2 : 0) + pad;
+
+    return {
+        cx: ox + cell.col * cs + cs / 2,
+        cy: pad + cell.row * cs + cs / 2,
+    };
+}
+
+export type PaintBrickCellsOptions = {
+    labelPaletteIndices?: boolean;
+    strokeWidth?: number;
+};
+
+export function paintBrickCells(
+    ctx: CanvasRenderingContext2D,
+    cells: BrickCell[],
+    palette: RGB[],
+    metrics: BrickLayoutMetrics,
+    options: PaintBrickCellsOptions = {},
+): void {
+    const { labelPaletteIndices = false, strokeWidth } = options;
+    const { radius } = metrics;
+    const lineWidth = strokeWidth ?? Math.max(0.5, metrics.cs * 0.35 * 0.73);
+
+    for (const cell of cells) {
+        if (cell.paletteIndex < 0) continue;
+
+        const color = palette[cell.paletteIndex];
+        const { cx, cy } = getBrickCellCenter(cell, metrics);
+
+        ctx.fillStyle = rgbToCss(color);
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.2)";
+        ctx.lineWidth = lineWidth;
+        ctx.stroke();
+
+        if (labelPaletteIndices) {
+            const fontSize = Math.max(8, radius * 1.05);
+            ctx.fillStyle = contrastingTextColor(color);
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+            ctx.fillText(String(cell.paletteIndex + 1), cx, cy);
+        }
+    }
+}
 
 export function loadImageToImageData(
     source: HTMLImageElement | HTMLCanvasElement,
@@ -66,9 +244,10 @@ export function drawCanvasBackground(
     w: number,
     h: number,
     background: CanvasBackground,
+    checkerSize = 8,
 ): void {
     if (background === "checkerboard") {
-        drawCheckerboard(ctx, x, y, w, h, "#f0f0f0", "#d8d8d8", 8);
+        drawCheckerboard(ctx, x, y, w, h, "#f0f0f0", "#d8d8d8", checkerSize);
         return;
     }
 
@@ -83,70 +262,11 @@ export function paintBrickPreview(
     palette: RGB[],
     options: PaintBrickPreviewOptions,
 ): void {
-    const { zoom, pad, layout, canvasBackground } = options;
-    const cs = cellSize * zoom;
-    const radius = cs * 0.48;
+    const { zoom, pad, layout, canvasBackground, labelPaletteIndices } = options;
+    const metrics = computeBrickLayout(cells, cellSize, zoom, pad, layout);
 
-    let maxCol = 0;
-    for (const cell of cells) {
-        maxCol = Math.max(maxCol, cell.col);
-    }
-
-    const rows =
-        cells.length === 0 ? 0 : Math.max(...cells.map((cell) => cell.row)) + 1;
-
-    let canvasWidth: number;
-    let canvasHeight: number;
-    let laceOriginX = 0;
-    let laceOriginY = 0;
-    let laceOffsetX = pad;
-    let laceOffsetY = pad;
-
-    if (layout === "lace" && cells.length > 0) {
-        let minRow = Infinity;
-        let maxRow = -Infinity;
-        let minCol = Infinity;
-        let maxCol = -Infinity;
-        for (const cell of cells) {
-            minRow = Math.min(minRow, cell.row);
-            maxRow = Math.max(maxRow, cell.row);
-            minCol = Math.min(minCol, cell.col);
-            maxCol = Math.max(maxCol, cell.col);
-        }
-        laceOriginX = ((minCol + maxCol) / 2 + 0.5) * cs;
-        laceOriginY = ((minRow + maxRow) / 2 + 0.5) * cs;
-
-        let minX = Infinity;
-        let maxX = -Infinity;
-        let minY = Infinity;
-        let maxY = -Infinity;
-        for (const cell of cells) {
-            const { x, y } = laceGridCellCenter(
-                cell.row,
-                cell.col,
-                cs,
-                laceOriginX,
-                laceOriginY,
-            );
-            minX = Math.min(minX, x);
-            maxX = Math.max(maxX, x);
-            minY = Math.min(minY, y);
-            maxY = Math.max(maxY, y);
-        }
-        laceOffsetX = pad - minX;
-        laceOffsetY = pad - minY;
-        canvasWidth = pad * 2 + (maxX - minX);
-        canvasHeight = pad * 2 + (maxY - minY);
-    } else {
-        canvasWidth =
-            layout === "brick"
-                ? pad * 2 + (maxCol + 1) * cs + cs / 2
-                : pad * 2 + (maxCol + 1) * cs;
-        canvasHeight = pad * 2 + rows * cellSize * zoom;
-    }
-
-    ctx.canvas.width = Math.max(1, Math.ceil(canvasWidth));
-    ctx.canvas.height = Math.max(1, Math.ceil(canvasHeight));
+    ctx.canvas.width = Math.max(1, Math.ceil(metrics.canvasWidth));
+    ctx.canvas.height = Math.max(1, Math.ceil(metrics.canvasHeight));
 
     drawCanvasBackground(
         ctx,
@@ -157,36 +277,8 @@ export function paintBrickPreview(
         canvasBackground,
     );
 
-    for (const cell of cells) {
-        let cx: number;
-        let cy: number;
-        if (layout === "lace") {
-            const center = laceGridCellCenter(
-                cell.row,
-                cell.col,
-                cs,
-                laceOriginX,
-                laceOriginY,
-            );
-            cx = center.x + laceOffsetX;
-            cy = center.y + laceOffsetY;
-        } else {
-            const ox =
-                (layout === "brick" && cell.row % 2 === 1 ? cs / 2 : 0) + pad;
-            cx = ox + cell.col * cs + cs / 2;
-            cy = pad + cell.row * cs + cs / 2;
-        }
-
-        if (cell.paletteIndex < 0) continue;
-
-        const color = palette[cell.paletteIndex];
-
-        ctx.fillStyle = rgbToCss(color);
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(0,0,0,0.2)";
-        ctx.lineWidth = Math.max(0.5, zoom * 0.35);
-        ctx.stroke();
-    }
+    paintBrickCells(ctx, cells, palette, metrics, {
+        labelPaletteIndices,
+        strokeWidth: Math.max(0.5, zoom * 0.35),
+    });
 }

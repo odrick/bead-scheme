@@ -36,6 +36,8 @@ type SettingsPanelProps = {
     onCanvasBackgroundChange: (value: CanvasBackground) => void;
     beadCount: number;
     totalCells: number;
+    canExport: boolean;
+    onExport: () => void;
 };
 
 export function SettingsPanel({
@@ -66,6 +68,8 @@ export function SettingsPanel({
     onCanvasBackgroundChange,
     beadCount,
     totalCells,
+    canExport,
+    onExport,
 }: SettingsPanelProps) {
     return (
         <aside className="panel">
@@ -290,6 +294,15 @@ export function SettingsPanel({
                     Клітинок (разом із фоном): <strong>{totalCells}</strong>
                 </div>
             </div>
+
+            <button
+                type="button"
+                className="export-button"
+                disabled={!canExport}
+                onClick={onExport}
+            >
+                Експорт
+            </button>
         </aside>
     );
 }
