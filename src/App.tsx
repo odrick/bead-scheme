@@ -60,12 +60,12 @@ export default function App() {
                         onBeadsPerRowChange={patternModel.setBeadsPerRow}
                         gridLayout={patternModel.gridLayout}
                         onGridLayoutChange={patternModel.setGridLayout}
+                        backgroundMode={patternModel.backgroundMode}
+                        onBackgroundModeChange={
+                            patternModel.setBackgroundMode
+                        }
                         backgroundHex={patternModel.backgroundHex}
                         onBackgroundHexChange={patternModel.setBackgroundHex}
-                        ignoreBackground={patternModel.ignoreBackground}
-                        onIgnoreBackgroundChange={
-                            patternModel.setIgnoreBackground
-                        }
                         catalogs={BEAD_CATALOGS}
                         beadCatalog={patternModel.beadCatalog}
                         onBeadCatalogChange={patternModel.setBeadCatalogId}

@@ -79,6 +79,37 @@ export function isBackground(p: RGB, bg: RGB, thresholdSq: number): boolean {
     return colorDistanceSq(p, bg) <= thresholdSq;
 }
 
+export type BackgroundMode = "transparent" | "color";
+
+const ALPHA_SIGNIFICANT = 128;
+
+export type BackgroundFilterOptions = {
+    mode: BackgroundMode;
+    background: RGB;
+    bgThresholdSq: number;
+};
+
+function isTransparentAlpha(alpha: number): boolean {
+    return alpha < ALPHA_SIGNIFICANT;
+}
+
+/** Піксель не бере участі в палітрі / клітинці схеми. */
+function shouldExcludePixel(
+    rgb: RGB,
+    alpha: number,
+    options: BackgroundFilterOptions,
+): boolean {
+    if (isTransparentAlpha(alpha)) return true;
+    if (
+        options.mode === "color" &&
+        isBackground(rgb, options.background, options.bgThresholdSq)
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
 const HIST_BUCKET = 10;
 
 function histKey(r: number, g: number, b: number): string {
@@ -123,10 +154,7 @@ type BucketEntry = {
 export function extractPalette(
     data: ImageData,
     paletteSize: number,
-    options: {
-        ignoreBackground: boolean;
-        background: RGB;
-        bgThresholdSq: number;
+    options: BackgroundFilterOptions & {
         /** Крок вибірки для швидкості; 1 = кожен піксель */
         sampleStep: number;
     },
@@ -142,14 +170,8 @@ export function extractPalette(
             const g = buf[i + 1];
             const b = buf[i + 2];
             const a = buf[i + 3];
-            if (a < 128) continue;
             const rgb: RGB = { r, g, b };
-            if (
-                options.ignoreBackground &&
-                isBackground(rgb, options.background, options.bgThresholdSq)
-            ) {
-                continue;
-            }
+            if (shouldExcludePixel(rgb, a, options)) continue;
             addPixel(buckets, r, g, b);
         }
     }
@@ -234,13 +256,15 @@ export function extractPalette(
     return palette;
 }
 
+type CellAverage = { avg: RGB; opaqueCount: number };
+
 function averageRect(
     data: ImageData,
     left: number,
     top: number,
     cw: number,
     ch: number,
-): RGB {
+): CellAverage {
     const { width, height, data: buf } = data;
     let sr = 0,
         sg = 0,
@@ -256,7 +280,7 @@ function averageRect(
         for (let x = x0; x < x1; x++) {
             const i = (y * width + x) * 4;
             const a = buf[i + 3];
-            if (a < 128) continue;
+            if (isTransparentAlpha(a)) continue;
             sr += buf[i];
             sg += buf[i + 1];
             sb += buf[i + 2];
@@ -264,12 +288,17 @@ function averageRect(
             n += 1;
         }
     }
-    if (n === 0) return { r: 255, g: 255, b: 255 };
+    if (n === 0) {
+        return { avg: { r: 255, g: 255, b: 255 }, opaqueCount: 0 };
+    }
 
     return {
-        r: Math.round(sr / n),
-        g: Math.round(sg / n),
-        b: Math.round(sb / n),
+        avg: {
+            r: Math.round(sr / n),
+            g: Math.round(sg / n),
+            b: Math.round(sb / n),
+        },
+        opaqueCount: n,
     };
 }
 
@@ -353,7 +382,7 @@ function averageRotatedSquare(
     cx: number,
     cy: number,
     size: number,
-): RGB {
+): CellAverage {
     const { width, height, data: buf } = imageData;
     const half = size / 2;
     const cos = COS45;
@@ -379,7 +408,7 @@ function averageRotatedSquare(
 
             const i = (y * width + x) * 4;
             const a = buf[i + 3];
-            if (a < 128) continue;
+            if (isTransparentAlpha(a)) continue;
             sr += buf[i];
             sg += buf[i + 1];
             sb += buf[i + 2];
@@ -387,12 +416,17 @@ function averageRotatedSquare(
         }
     }
 
-    if (n === 0) return { r: 255, g: 255, b: 255 };
+    if (n === 0) {
+        return { avg: { r: 255, g: 255, b: 255 }, opaqueCount: 0 };
+    }
 
     return {
-        r: Math.round(sr / n),
-        g: Math.round(sg / n),
-        b: Math.round(sb / n),
+        avg: {
+            r: Math.round(sr / n),
+            g: Math.round(sg / n),
+            b: Math.round(sb / n),
+        },
+        opaqueCount: n,
     };
 }
 
@@ -400,14 +434,10 @@ function paletteIndexForAverage(
     avg: RGB,
     palette: RGB[],
     paletteLabs: Lab[],
-    options: {
-        ignoreBackground: boolean;
-        background: RGB;
-        bgThresholdSq: number;
-    },
+    options: BackgroundFilterOptions,
 ): number {
     if (
-        options.ignoreBackground &&
+        options.mode === "color" &&
         isBackground(avg, options.background, options.bgThresholdSq)
     ) {
         return -1;
@@ -432,10 +462,7 @@ export function buildBrickGrid(
     imageData: ImageData,
     cellSize: number,
     palette: RGB[],
-    options: {
-        ignoreBackground: boolean;
-        background: RGB;
-        bgThresholdSq: number;
+    options: BackgroundFilterOptions & {
         layout?: GridLayout;
     },
 ): BrickCell[] {
@@ -472,13 +499,21 @@ export function buildBrickGrid(
                     continue;
                 }
 
-                const avg = averageRotatedSquare(imageData, rcx, rcy, cs);
-                const paletteIndex = paletteIndexForAverage(
-                    avg,
-                    palette,
-                    paletteLabs,
-                    options,
+                const { avg, opaqueCount } = averageRotatedSquare(
+                    imageData,
+                    rcx,
+                    rcy,
+                    cs,
                 );
+                const paletteIndex =
+                    opaqueCount === 0
+                        ? -1
+                        : paletteIndexForAverage(
+                              avg,
+                              palette,
+                              paletteLabs,
+                              options,
+                          );
 
                 cells.push({ row, col, avg, paletteIndex });
             }
@@ -498,13 +533,22 @@ export function buildBrickGrid(
             const ch = Math.min(cs, h - top);
             if (cw <= 0 || ch <= 0) break;
 
-            const avg = averageRect(imageData, left, top, cw, ch);
-            const paletteIndex = paletteIndexForAverage(
-                avg,
-                palette,
-                paletteLabs,
-                options,
+            const { avg, opaqueCount } = averageRect(
+                imageData,
+                left,
+                top,
+                cw,
+                ch,
             );
+            const paletteIndex =
+                opaqueCount === 0
+                    ? -1
+                    : paletteIndexForAverage(
+                          avg,
+                          palette,
+                          paletteLabs,
+                          options,
+                      );
 
             cells.push({ row, col, avg, paletteIndex });
             col += 1;

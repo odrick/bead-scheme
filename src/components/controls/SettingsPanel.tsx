@@ -1,6 +1,7 @@
 import type { DragEventHandler, RefObject } from "react";
 import { type PreparedBeadCatalog } from "../../beadCatalog";
-import type { GridLayout } from "../../beadMath";
+import { BackgroundColorField } from "./BackgroundColorField";
+import type { BackgroundMode, GridLayout } from "../../beadMath";
 import type { CanvasBackground } from "../../features/preview/canvasUtils";
 import {
     PREVIEW_ZOOM_MAX,
@@ -21,10 +22,10 @@ type SettingsPanelProps = {
     onBeadsPerRowChange: (value: number) => void;
     gridLayout: GridLayout;
     onGridLayoutChange: (value: GridLayout) => void;
+    backgroundMode: BackgroundMode;
+    onBackgroundModeChange: (value: BackgroundMode) => void;
     backgroundHex: string;
     onBackgroundHexChange: (value: string) => void;
-    ignoreBackground: boolean;
-    onIgnoreBackgroundChange: (value: boolean) => void;
     catalogs: PreparedBeadCatalog[];
     beadCatalog: PreparedBeadCatalog;
     onBeadCatalogChange: (value: string) => void;
@@ -53,10 +54,10 @@ export function SettingsPanel({
     onBeadsPerRowChange,
     gridLayout,
     onGridLayoutChange,
+    backgroundMode,
+    onBackgroundModeChange,
     backgroundHex,
     onBackgroundHexChange,
-    ignoreBackground,
-    onIgnoreBackgroundChange,
     catalogs,
     beadCatalog,
     onBeadCatalogChange,
@@ -164,27 +165,41 @@ export function SettingsPanel({
                 </div>
             </div>
 
-            <label className="field">
-                <span className="label">Колір фону (для виключення)</span>
-                <input
-                    type="color"
-                    value={backgroundHex}
-                    onChange={(event) =>
-                        onBackgroundHexChange(event.target.value)
-                    }
-                />
-            </label>
+            <div className="field">
+                <span className="label">Фон</span>
+                <div className="layout-toggle">
+                    <label className="layout-option">
+                        <input
+                            type="radio"
+                            name="imageBackground"
+                            checked={backgroundMode === "transparent"}
+                            onChange={() =>
+                                onBackgroundModeChange("transparent")
+                            }
+                        />
+                        Прозорий
+                    </label>
+                    <label className="layout-option">
+                        <input
+                            type="radio"
+                            name="imageBackground"
+                            checked={backgroundMode === "color"}
+                            onChange={() => onBackgroundModeChange("color")}
+                        />
+                        Колір
+                    </label>
+                </div>
+            </div>
 
-            <label className="field checkbox">
-                <input
-                    type="checkbox"
-                    checked={ignoreBackground}
-                    onChange={(event) =>
-                        onIgnoreBackgroundChange(event.target.checked)
-                    }
-                />
-                <span>Не враховувати фон</span>
-            </label>
+            {backgroundMode === "color" ? (
+                <label className="field">
+                    <span className="label">Колір фону</span>
+                    <BackgroundColorField
+                        value={backgroundHex}
+                        onCommit={onBackgroundHexChange}
+                    />
+                </label>
+            ) : null}
 
             <label className="field">
                 <span className="label">Виробник</span>

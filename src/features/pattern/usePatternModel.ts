@@ -10,6 +10,7 @@ import {
     countBeadsByPaletteIndex,
     extractPalette,
     parseHexColor,
+    type BackgroundMode,
     type BrickCell,
     type GridLayout,
     type RGB,
@@ -36,10 +37,10 @@ type PatternModel = {
     setBeadsPerRow: (value: number) => void;
     gridLayout: GridLayout;
     setGridLayout: (value: GridLayout) => void;
+    backgroundMode: BackgroundMode;
+    setBackgroundMode: (value: BackgroundMode) => void;
     backgroundHex: string;
     setBackgroundHex: (value: string) => void;
-    ignoreBackground: boolean;
-    setIgnoreBackground: (value: boolean) => void;
     previewZoom: number;
     setPreviewZoom: Dispatch<SetStateAction<number>>;
     canvasBackground: CanvasBackground;
@@ -64,8 +65,9 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
     const [paletteSize, setPaletteSize] = useState(10);
     const [beadsPerRow, setBeadsPerRow] = useState(60);
     const [gridLayout, setGridLayout] = useState<GridLayout>("brick");
+    const [backgroundMode, setBackgroundMode] =
+        useState<BackgroundMode>("color");
     const [backgroundHex, setBackgroundHex] = useState(DEFAULT_BG);
-    const [ignoreBackground, setIgnoreBackground] = useState(true);
     const [previewZoom, setPreviewZoomState] = useState(1.2);
     const setPreviewZoom = useCallback((value: SetStateAction<number>) => {
         setPreviewZoomState((prev) => {
@@ -102,16 +104,17 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         }
 
         const imageData = loadImageToImageData(bitmap);
-        const palette = extractPalette(imageData, paletteSize, {
-            ignoreBackground,
+        const backgroundFilter = {
+            mode: backgroundMode,
             background: backgroundRgb,
             bgThresholdSq: BG_MATCH_SQ,
+        };
+        const palette = extractPalette(imageData, paletteSize, {
+            ...backgroundFilter,
             sampleStep: PALETTE_SAMPLE_STEP,
         });
         const cells = buildBrickGrid(imageData, cellSizePx, palette, {
-            ignoreBackground,
-            background: backgroundRgb,
-            bgThresholdSq: BG_MATCH_SQ,
+            ...backgroundFilter,
             layout: gridLayout,
         });
 
@@ -121,7 +124,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         paletteSize,
         cellSizePx,
         backgroundRgb,
-        ignoreBackground,
+        backgroundMode,
         gridLayout,
     ]);
 
@@ -162,10 +165,10 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         setBeadsPerRow,
         gridLayout,
         setGridLayout,
+        backgroundMode,
+        setBackgroundMode,
         backgroundHex,
         setBackgroundHex,
-        ignoreBackground,
-        setIgnoreBackground,
         previewZoom,
         setPreviewZoom,
         canvasBackground,
