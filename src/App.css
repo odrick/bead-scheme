@@ -102,8 +102,7 @@ body {
 }
 
 input[type="file"],
-input[type="color"],
-select {
+input[type="color"] {
     width: 100%;
 }
 
@@ -234,31 +233,6 @@ input[type="range"]::-moz-range-thumb {
 .layout-option input {
     margin-top: 0.15rem;
     accent-color: var(--accent);
-}
-
-.select-catalog {
-    padding: 0.5rem 0.65rem;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    font-size: 0.9rem;
-    background: var(--card-strong);
-    color: rgba(255, 255, 255, 0.88);
-}
-
-.select-catalog:focus {
-    outline: 2px solid rgba(255, 255, 255, 0.18);
-    outline-offset: 2px;
-}
-
-.catalog-hint {
-    font-size: 0.76rem;
-    color: var(--muted2);
-    line-height: 1.35;
-}
-
-.catalog-hint a {
-    color: rgba(226, 232, 240, 0.9);
-    text-decoration-color: rgba(255, 255, 255, 0.25);
 }
 
 .upload-field {
@@ -483,7 +457,7 @@ input[type="range"]::-moz-range-thumb {
     margin: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
     gap: 0.55rem;
 }
 
@@ -508,30 +482,9 @@ input[type="range"]::-moz-range-thumb {
     flex-shrink: 0;
 }
 
-.idx {
-    font-weight: 750;
-    min-width: 1.2em;
-    color: rgba(226, 232, 240, 0.9);
-}
-
-.hex {
-    flex-shrink: 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: rgba(226, 232, 240, 0.62);
-}
-
-.bead-code {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+.bead-count {
     font-weight: 800;
     color: rgba(255, 255, 255, 0.86);
-    padding-left: 0.45rem;
-    border-left: 1px solid rgba(148, 163, 184, 0.16);
-    margin-left: 0.05rem;
 }
 
 @media (max-width: 800px) {

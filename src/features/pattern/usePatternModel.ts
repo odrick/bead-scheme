@@ -1,11 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
-    BEAD_CATALOGS,
-    nearestBead,
-    type PreparedBeadCatalog,
-} from "../../beadCatalog";
-import {
     buildBrickGrid,
     countBeadsByPaletteIndex,
     extractPalette,
@@ -24,11 +19,6 @@ import { clampPreviewZoom } from "../preview/previewZoom";
 const DEFAULT_BG = "#ffffff";
 const BG_MATCH_SQ = 55 * 55;
 const PALETTE_SAMPLE_STEP = 2;
-const DEFAULT_CATALOG = BEAD_CATALOGS[0];
-
-if (!DEFAULT_CATALOG) {
-    throw new Error("No bead catalogs configured.");
-}
 
 type PatternModel = {
     paletteSize: number;
@@ -45,16 +35,10 @@ type PatternModel = {
     setPreviewZoom: Dispatch<SetStateAction<number>>;
     canvasBackground: CanvasBackground;
     setCanvasBackground: (value: CanvasBackground) => void;
-    useManufacturerPalette: boolean;
-    setUseManufacturerPalette: (value: boolean) => void;
-    beadCatalogId: string;
-    setBeadCatalogId: (value: string) => void;
-    beadCatalog: PreparedBeadCatalog;
     backgroundRgb: RGB;
     cellSizePx: number;
     palette: RGB[];
     cells: BrickCell[];
-    beadMatches: ReturnType<typeof nearestBead>[];
     patternPalette: RGB[];
     hasPattern: boolean;
     beadCount: number;
@@ -77,19 +61,10 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
     }, []);
     const [canvasBackground, setCanvasBackground] =
         useState<CanvasBackground>("checkerboard");
-    const [useManufacturerPalette, setUseManufacturerPalette] = useState(false);
-    const [beadCatalogId, setBeadCatalogId] = useState(DEFAULT_CATALOG.id);
 
     const backgroundRgb = useMemo(
         () => parseHexColor(backgroundHex),
         [backgroundHex],
-    );
-
-    const beadCatalog = useMemo(
-        () =>
-            BEAD_CATALOGS.find((catalog) => catalog.id === beadCatalogId) ??
-            DEFAULT_CATALOG,
-        [beadCatalogId],
     );
 
     const cellSizePx = useMemo(() => {
@@ -128,20 +103,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         gridLayout,
     ]);
 
-    const beadMatches = useMemo(
-        () => palette.map((color) => nearestBead(color, beadCatalog)),
-        [palette, beadCatalog],
-    );
-
-    const patternPalette = useMemo(() => {
-        if (!useManufacturerPalette) return palette;
-
-        return palette.map((color, index) => {
-            const match = beadMatches[index];
-
-            return match?.beadHex ? parseHexColor(match.beadHex) : color;
-        });
-    }, [palette, beadMatches, useManufacturerPalette]);
+    const patternPalette = palette;
 
     const hasPattern = useMemo(
         () => cells.some((cell) => cell.paletteIndex >= 0),
@@ -173,16 +135,10 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         setPreviewZoom,
         canvasBackground,
         setCanvasBackground,
-        useManufacturerPalette,
-        setUseManufacturerPalette,
-        beadCatalogId,
-        setBeadCatalogId,
-        beadCatalog,
         backgroundRgb,
         cellSizePx,
         palette,
         cells,
-        beadMatches,
         patternPalette,
         hasPattern,
         beadCount,

@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import "./App.css";
-import { BEAD_CATALOGS } from "./beadCatalog";
 import { ExportDialog } from "./components/export/ExportDialog";
 import { SettingsPanel } from "./components/controls/SettingsPanel";
 import { PaletteSection } from "./components/palette/PaletteSection";
@@ -8,7 +7,7 @@ import { OriginalImagePreview } from "./components/preview/OriginalImagePreview"
 import { PatternPreview } from "./components/preview/PatternPreview";
 import {
     downloadCanvasAsPng,
-    exportFilenameForCatalog,
+    exportFilename,
     renderPatternExport,
 } from "./features/export/exportPatternImage";
 import { useImageUpload } from "./features/image/useImageUpload";
@@ -28,8 +27,6 @@ export default function App() {
                 cells: patternModel.cells,
                 cellSizePx: patternModel.cellSizePx,
                 patternPalette: patternModel.patternPalette,
-                beadMatches: patternModel.beadMatches,
-                manufacturerLabel: patternModel.beadCatalog.label,
                 gridLayout: patternModel.gridLayout,
                 canvasBackground: patternModel.canvasBackground,
                 labelPaletteIndices,
@@ -37,7 +34,7 @@ export default function App() {
 
             downloadCanvasAsPng(
                 canvas,
-                exportFilenameForCatalog(patternModel.beadCatalog),
+                exportFilename(),
             );
         },
         [patternModel],
@@ -66,15 +63,6 @@ export default function App() {
                         }
                         backgroundHex={patternModel.backgroundHex}
                         onBackgroundHexChange={patternModel.setBackgroundHex}
-                        catalogs={BEAD_CATALOGS}
-                        beadCatalog={patternModel.beadCatalog}
-                        onBeadCatalogChange={patternModel.setBeadCatalogId}
-                        useManufacturerPalette={
-                            patternModel.useManufacturerPalette
-                        }
-                        onUseManufacturerPaletteChange={
-                            patternModel.setUseManufacturerPalette
-                        }
                         previewZoom={patternModel.previewZoom}
                         onPreviewZoomChange={patternModel.setPreviewZoom}
                         canvasBackground={patternModel.canvasBackground}
@@ -111,7 +99,6 @@ export default function App() {
 
                 <PaletteSection
                     palette={patternModel.palette}
-                    beadMatches={patternModel.beadMatches}
                     beadCounts={patternModel.beadCountsByPalette}
                 />
             </div>

@@ -1,5 +1,4 @@
 import type { DragEventHandler, RefObject } from "react";
-import { type PreparedBeadCatalog } from "../../beadCatalog";
 import { BackgroundColorField } from "./BackgroundColorField";
 import type { BackgroundMode, GridLayout } from "../../beadMath";
 import type { CanvasBackground } from "../../features/preview/canvasUtils";
@@ -26,11 +25,6 @@ type SettingsPanelProps = {
     onBackgroundModeChange: (value: BackgroundMode) => void;
     backgroundHex: string;
     onBackgroundHexChange: (value: string) => void;
-    catalogs: PreparedBeadCatalog[];
-    beadCatalog: PreparedBeadCatalog;
-    onBeadCatalogChange: (value: string) => void;
-    useManufacturerPalette: boolean;
-    onUseManufacturerPaletteChange: (value: boolean) => void;
     previewZoom: number;
     onPreviewZoomChange: (value: number) => void;
     canvasBackground: CanvasBackground;
@@ -58,11 +52,6 @@ export function SettingsPanel({
     onBackgroundModeChange,
     backgroundHex,
     onBackgroundHexChange,
-    catalogs,
-    beadCatalog,
-    onBeadCatalogChange,
-    useManufacturerPalette,
-    onUseManufacturerPaletteChange,
     previewZoom,
     onPreviewZoomChange,
     canvasBackground,
@@ -200,47 +189,6 @@ export function SettingsPanel({
                     />
                 </label>
             ) : null}
-
-            <label className="field">
-                <span className="label">Виробник</span>
-                <select
-                    className="select-catalog"
-                    value={beadCatalog.id}
-                    onChange={(event) =>
-                        onBeadCatalogChange(event.target.value)
-                    }
-                >
-                    {catalogs.map((catalog) => (
-                        <option key={catalog.id} value={catalog.id}>
-                            {catalog.label}
-                        </option>
-                    ))}
-                </select>
-                {beadCatalog.approximateColors ? null : (
-                    <span className="catalog-hint">
-                        RGB з відкритого CSV у{" "}
-                        <a
-                            href={beadCatalog.sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            beadcolors
-                        </a>
-                        .
-                    </span>
-                )}
-            </label>
-
-            <label className="field checkbox">
-                <input
-                    type="checkbox"
-                    checked={useManufacturerPalette}
-                    onChange={(event) =>
-                        onUseManufacturerPaletteChange(event.target.checked)
-                    }
-                />
-                <span>В палітрі виробника</span>
-            </label>
 
             <div className="field">
                 <span className="label">Фон канвасу схеми</span>

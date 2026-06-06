@@ -1,4 +1,3 @@
-import type { PreparedBeadCatalog } from "../../beadCatalog";
 import {
     countBeadsByPaletteIndex,
     rgbToCss,
@@ -28,12 +27,8 @@ export const EXPORT_LAYOUT = {
     footReferenceWidth: 1200,
     /** Поля зліва/справа та знизу всього файлу (× footScale). */
     margin: 48,
-    /** Висота блоку з назвою виробника (× footScale). */
-    titleBlock: 40,
-    /** Проміжок між назвою виробника та палітрою (× footScale). */
+    /** Проміжок між схемою та палітрою (× footScale). */
     sectionGap: 28,
-    /** Розмір шрифту назви виробника (× footScale). */
-    titleFontSize: 28,
 
     /** Загальний коефіцієнт зменшення елементів палітри (0.8 = −20%). */
     paletteItemScale: 0.8,
@@ -41,16 +36,10 @@ export const EXPORT_LAYOUT = {
     paletteRowHeight: 52,
     /** Радіус кольорового кружечка (× footScale × paletteItemScale). */
     paletteDotRadius: 18,
-    /** Шрифт номера в палітрі (× footScale × paletteItemScale). */
-    paletteNumberFontSize: 28,
-    /** Шрифт коду виробника (× footScale × paletteItemScale). */
-    paletteCodeFontSize: 26,
-    /** Відступ після номера до початку кружечка (× … × paletteItemScale). */
-    paletteNumberPad: 6,
-    /** Зазор між номером і кружечком (× … × paletteItemScale). */
-    paletteNumberToDotGap: 4,
-    /** Зазор між кружечком і текстом коду (× … × paletteItemScale). */
-    paletteCodeGap: 14,
+    /** Шрифт кількості в палітрі (× footScale × paletteItemScale). */
+    paletteCountFontSize: 28,
+    /** Зазор між кружечком і кількістю (× … × paletteItemScale). */
+    paletteCountGap: 14,
     /** Внутрішній відступ усередині рамки (× … × paletteItemScale). */
     paletteItemPad: 10,
     /** Радіус заокруглення рамки (× … × paletteItemScale). */
@@ -62,7 +51,7 @@ export const EXPORT_LAYOUT = {
     /** Вертикальний зазор між рамками (× footScale). */
     paletteItemGapY: 8,
     /** Елементів палітри в рядку; ширина рядка ділиться на cols порівних слотів. */
-    paletteColumnsPerRow: 4,
+    paletteColumnsPerRow: 8,
 } as const;
 
 /** @deprecated Використовуйте EXPORT_LAYOUT.schemeTargetPx */
@@ -72,8 +61,6 @@ export type ExportPatternInput = {
     cells: BrickCell[];
     cellSizePx: number;
     patternPalette: RGB[];
-    beadMatches: { code: string }[];
-    manufacturerLabel: string;
     gridLayout: GridLayout;
     canvasBackground: CanvasBackground;
     labelPaletteIndices: boolean;
@@ -98,9 +85,7 @@ function schemeExportZoom(
 type PaletteLegendMetrics = {
     rowH: number;
     dotR: number;
-    numberPad: number;
-    numberToDotGap: number;
-    codeGap: number;
+    countGap: number;
     itemGapX: number;
     itemGapY: number;
     itemPad: number;
@@ -116,9 +101,7 @@ function paletteLegendMetrics(scale: number): PaletteLegendMetrics {
     return {
         rowH: L.paletteRowHeight * s,
         dotR,
-        numberPad: L.paletteNumberPad * s,
-        numberToDotGap: L.paletteNumberToDotGap * s,
-        codeGap: L.paletteCodeGap * s,
+        countGap: L.paletteCountGap * s,
         itemGapX: L.paletteItemGapX * scale,
         itemGapY: L.paletteItemGapY * scale,
         itemPad: L.paletteItemPad * s,
@@ -154,38 +137,14 @@ function computePaletteLegendColumnLayout(
     return { metrics, itemBoxWidth, columnStep, cols, rows };
 }
 
-const paletteLegendNumberFont = (scale: number) => {
+const paletteLegendCountFont = (scale: number) => {
     const size = Math.round(
-        EXPORT_LAYOUT.paletteNumberFontSize *
+        EXPORT_LAYOUT.paletteCountFontSize *
             scale *
             EXPORT_LAYOUT.paletteItemScale,
     );
-    return `600 ${size}px system-ui, sans-serif`;
+    return `700 ${size}px system-ui, sans-serif`;
 };
-
-const paletteLegendCodeFont = (scale: number) => {
-    const size = Math.round(
-        EXPORT_LAYOUT.paletteCodeFontSize *
-            scale *
-            EXPORT_LAYOUT.paletteItemScale,
-    );
-    return `700 ${size}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
-};
-
-function paletteLegendNumberColumnWidth(
-    ctx: CanvasRenderingContext2D,
-    itemCount: number,
-    scale: number,
-): number {
-    const { numberPad } = paletteLegendMetrics(scale);
-    ctx.font = paletteLegendNumberFont(scale);
-    let maxTextW = 0;
-    for (let i = 0; i < itemCount; i += 1) {
-        maxTextW = Math.max(maxTextW, ctx.measureText(String(i + 1)).width);
-    }
-
-    return maxTextW + numberPad;
-}
 
 function measurePaletteLegendHeight(
     width: number,
@@ -220,7 +179,6 @@ function drawPaletteLegend(
     y: number,
     width: number,
     palette: RGB[],
-    beadMatches: { code: string }[],
     beadCounts: number[],
     scale: number,
 ): void {
@@ -229,14 +187,12 @@ function drawPaletteLegend(
     const {
         rowH,
         dotR,
-        numberToDotGap,
-        codeGap,
+        countGap,
         itemGapY,
         itemPad,
         borderRadius,
         borderWidth,
     } = metrics;
-    const numberColW = paletteLegendNumberColumnWidth(ctx, palette.length, scale);
 
     for (let i = 0; i < palette.length; i += 1) {
         const col = i % cols;
@@ -252,13 +208,7 @@ function drawPaletteLegend(
         ctx.lineWidth = borderWidth;
         strokeRoundedRect(ctx, boxX, boxY, boxW, boxH, borderRadius);
 
-        ctx.fillStyle = "#111111";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.font = paletteLegendNumberFont(scale);
-        ctx.fillText(String(i + 1), contentX, midY);
-
-        const dotCx = contentX + numberColW + numberToDotGap + dotR;
+        const dotCx = contentX + dotR;
         ctx.fillStyle = rgbToCss(palette[i]);
         ctx.beginPath();
         ctx.arc(dotCx, midY, dotR, 0, Math.PI * 2);
@@ -267,11 +217,12 @@ function drawPaletteLegend(
         ctx.lineWidth = Math.max(1, borderWidth * 0.9);
         ctx.stroke();
 
-        const code = beadMatches[i]?.code ?? "—";
         const count = beadCounts[i] ?? 0;
         ctx.fillStyle = "#000000";
-        ctx.font = paletteLegendCodeFont(scale);
-        ctx.fillText(`${code} (${count})`, dotCx + dotR + codeGap, midY);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.font = paletteLegendCountFont(scale);
+        ctx.fillText(String(count), dotCx + dotR + countGap, midY);
     }
 }
 
@@ -329,7 +280,6 @@ export function renderPatternExport(
     const L = EXPORT_LAYOUT;
     const footScale = Math.max(0.35, schemeW / L.footReferenceWidth);
     const margin = Math.round(L.margin * footScale);
-    const titleBlock = Math.round(L.titleBlock * footScale);
     const sectionGap = Math.round(L.sectionGap * footScale);
     const contentW = schemeW;
     const beadCounts = countBeadsByPaletteIndex(
@@ -345,7 +295,7 @@ export function renderPatternExport(
 
     const totalW = schemeW + margin * 2;
     const totalH =
-        margin + schemeH + titleBlock + sectionGap + paletteHeight + margin;
+        margin + schemeH + sectionGap + paletteHeight + margin;
 
     const canvas = document.createElement("canvas");
     canvas.width = totalW;
@@ -361,20 +311,12 @@ export function renderPatternExport(
 
     ctx.drawImage(schemeCanvas, margin, margin);
 
-    const titleY = margin + schemeH + titleBlock * 0.72;
-    ctx.fillStyle = "#111111";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.font = `600 ${Math.round(L.titleFontSize * footScale)}px system-ui, sans-serif`;
-    ctx.fillText(input.manufacturerLabel, margin, titleY);
-
     drawPaletteLegend(
         ctx,
         margin,
-        margin + schemeH + titleBlock + sectionGap,
+        margin + schemeH + sectionGap,
         contentW,
         input.patternPalette,
-        input.beadMatches,
         beadCounts,
         footScale,
     );
@@ -393,7 +335,6 @@ export function downloadCanvasAsPng(
     link.click();
 }
 
-export function exportFilenameForCatalog(catalog: PreparedBeadCatalog): string {
-    const slug = catalog.id.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-    return `bead-scheme${slug ? `-${slug}` : ""}.png`;
+export function exportFilename(): string {
+    return "bead-scheme.png";
 }
