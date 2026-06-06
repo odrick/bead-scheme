@@ -20,6 +20,11 @@ const DEFAULT_BG = "#ffffff";
 const BG_MATCH_SQ = 55 * 55;
 const PALETTE_SAMPLE_STEP = 2;
 
+type PaletteOverrides = {
+    baseKey: string;
+    colors: Record<number, RGB>;
+};
+
 type PatternModel = {
     paletteSize: number;
     setPaletteSize: (value: number) => void;
@@ -40,6 +45,9 @@ type PatternModel = {
     palette: RGB[];
     cells: BrickCell[];
     patternPalette: RGB[];
+    setPaletteColor: (index: number, hex: string) => void;
+    resetPaletteColor: (index: number) => void;
+    resetPaletteColors: () => void;
     hasPattern: boolean;
     beadCount: number;
     beadCountsByPalette: number[];
@@ -61,6 +69,10 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
     }, []);
     const [canvasBackground, setCanvasBackground] =
         useState<CanvasBackground>("checkerboard");
+    const [paletteOverrides, setPaletteOverrides] = useState<PaletteOverrides>({
+        baseKey: "",
+        colors: {},
+    });
 
     const backgroundRgb = useMemo(
         () => parseHexColor(backgroundHex),
@@ -103,7 +115,58 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         gridLayout,
     ]);
 
-    const patternPalette = palette;
+    const paletteBaseKey = useMemo(
+        () => palette.map((color) => `${color.r},${color.g},${color.b}`).join("|"),
+        [palette],
+    );
+
+    const patternPalette = useMemo(() => {
+        if (paletteOverrides.baseKey !== paletteBaseKey) return palette;
+
+        return palette.map((color, index) => paletteOverrides.colors[index] ?? color);
+    }, [palette, paletteBaseKey, paletteOverrides]);
+
+    const setPaletteColor = useCallback(
+        (index: number, hex: string) => {
+            const color = parseHexColor(hex);
+
+            setPaletteOverrides((current) => {
+                const colors =
+                    current.baseKey === paletteBaseKey ? current.colors : {};
+
+                return {
+                    baseKey: paletteBaseKey,
+                    colors: {
+                        ...colors,
+                        [index]: color,
+                    },
+                };
+            });
+        },
+        [paletteBaseKey],
+    );
+
+    const resetPaletteColor = useCallback(
+        (index: number) => {
+            setPaletteOverrides((current) => {
+                if (current.baseKey !== paletteBaseKey) {
+                    return { baseKey: paletteBaseKey, colors: {} };
+                }
+
+                const { [index]: _removedColor, ...colors } = current.colors;
+
+                return {
+                    baseKey: paletteBaseKey,
+                    colors,
+                };
+            });
+        },
+        [paletteBaseKey],
+    );
+
+    const resetPaletteColors = useCallback(() => {
+        setPaletteOverrides({ baseKey: paletteBaseKey, colors: {} });
+    }, [paletteBaseKey]);
 
     const hasPattern = useMemo(
         () => cells.some((cell) => cell.paletteIndex >= 0),
@@ -140,6 +203,9 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         palette,
         cells,
         patternPalette,
+        setPaletteColor,
+        resetPaletteColor,
+        resetPaletteColors,
         hasPattern,
         beadCount,
         beadCountsByPalette,

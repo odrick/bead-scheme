@@ -22,6 +22,13 @@ export function rgbToCss(c: RGB): string {
     return `rgb(${c.r},${c.g},${c.b})`;
 }
 
+export function rgbToHex(c: RGB): string {
+    const toHex = (value: number) =>
+        Math.round(value).toString(16).padStart(2, "0");
+
+    return `#${toHex(c.r)}${toHex(c.g)}${toHex(c.b)}`;
+}
+
 export function colorDistanceSq(a: RGB, b: RGB): number {
     const dr = a.r - b.r;
     const dg = a.g - b.g;

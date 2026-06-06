@@ -47,7 +47,7 @@ export const EXPORT_LAYOUT = {
     /** Товщина рамки (× … × paletteItemScale, мін. 1 px). */
     paletteBorderWidth: 1.1,
     /** Горизонтальний зазор між рамками сусідніх елементів (× footScale). */
-    paletteItemGapX: 28,
+    paletteItemGapX: 14,
     /** Вертикальний зазор між рамками (× footScale). */
     paletteItemGapY: 8,
     /** Елементів палітри в рядку; ширина рядка ділиться на cols порівних слотів. */

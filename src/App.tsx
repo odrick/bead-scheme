@@ -69,6 +69,7 @@ export default function App() {
                         onCanvasBackgroundChange={
                             patternModel.setCanvasBackground
                         }
+                        onResetPaletteColors={patternModel.resetPaletteColors}
                         beadCount={patternModel.beadCount}
                         totalCells={patternModel.cells.length}
                         canExport={
@@ -98,8 +99,10 @@ export default function App() {
                 </div>
 
                 <PaletteSection
-                    palette={patternModel.palette}
+                    palette={patternModel.patternPalette}
                     beadCounts={patternModel.beadCountsByPalette}
+                    onColorChange={patternModel.setPaletteColor}
+                    onColorReset={patternModel.resetPaletteColor}
                 />
             </div>
 
