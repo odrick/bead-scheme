@@ -103,6 +103,7 @@ export default function App() {
                             patternModel.setCellPaletteIndex
                         }
                         onCellEditStrokeEnd={patternModel.endCellEditStroke}
+                        onCellEditBatch={patternModel.applyCellEditBatch}
                         onUndoCellEdit={patternModel.undoCellEdit}
                         onRedoCellEdit={patternModel.redoCellEdit}
                         canUndoCellEdit={patternModel.canUndoCellEdit}

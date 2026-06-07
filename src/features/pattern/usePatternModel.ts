@@ -87,6 +87,7 @@ type PatternModel = {
         options?: SetCellPaletteIndexOptions,
     ) => void;
     endCellEditStroke: () => void;
+    applyCellEditBatch: (changes: CellEditChange[]) => void;
     undoCellEdit: () => void;
     redoCellEdit: () => void;
     canUndoCellEdit: boolean;
@@ -450,6 +451,49 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         });
     }, [cellsBaseKey]);
 
+    const applyCellEditBatch = useCallback(
+        (changes: CellEditChange[]) => {
+            if (changes.length === 0) return;
+
+            setCellOverrides((current) => {
+                let cells =
+                    current.baseKey === cellsBaseKey ? { ...current.cells } : {};
+
+                for (const { row, col, to } of changes) {
+                    const key = cellKey(row, col);
+                    const baseIndex = getBasePaletteIndex(
+                        baseCellsRef.current,
+                        row,
+                        col,
+                    );
+                    cells = setOverrideValue(cells, key, to, baseIndex);
+                }
+
+                const next = { baseKey: cellsBaseKey, cells };
+                cellOverridesRef.current = next;
+                return next;
+            });
+
+            setEditHistory((current) => {
+                const undo =
+                    current.baseKey === cellsBaseKey
+                        ? [...current.undo, changes]
+                        : [changes];
+
+                while (undo.length > MAX_CELL_EDIT_HISTORY) {
+                    undo.shift();
+                }
+
+                return {
+                    baseKey: cellsBaseKey,
+                    undo,
+                    redo: [],
+                };
+            });
+        },
+        [cellsBaseKey],
+    );
+
     const undoCellEdit = useCallback(() => {
         setEditHistory((current) => {
             if (current.baseKey !== cellsBaseKey || current.undo.length === 0) {
@@ -559,6 +603,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         resetPattern,
         setCellPaletteIndex,
         endCellEditStroke,
+        applyCellEditBatch,
         undoCellEdit,
         redoCellEdit,
         canUndoCellEdit,

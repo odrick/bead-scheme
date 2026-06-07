@@ -8,7 +8,7 @@ import {
 } from "react";
 import { rgbToCss, type BrickCell, type GridLayout, type RGB } from "../../beadMath";
 import { PREVIEW_ZOOM_STEP } from "../../features/preview/previewZoom";
-import { floodFillRegion } from "../../features/pattern/floodFill";
+import { floodFillChanges } from "../../features/pattern/floodFill";
 import {
     getCanvasPointerCoords,
     hitTestBrickCell,
@@ -36,6 +36,14 @@ type PatternPreviewProps = {
         options?: { stroke?: boolean },
     ) => void;
     onCellEditStrokeEnd: () => void;
+    onCellEditBatch: (
+        changes: Array<{
+            row: number;
+            col: number;
+            from: number;
+            to: number;
+        }>,
+    ) => void;
     onUndoCellEdit: () => void;
     onRedoCellEdit: () => void;
     canUndoCellEdit: boolean;
@@ -362,6 +370,7 @@ export function PatternPreview({
     canvasBackground,
     onCellPaletteIndexChange,
     onCellEditStrokeEnd,
+    onCellEditBatch,
     onUndoCellEdit,
     onRedoCellEdit,
     canUndoCellEdit,
@@ -459,23 +468,16 @@ export function PatternPreview({
             if (!cell) return;
 
             if (editTool === "fill") {
-                const region = floodFillRegion(
+                const changes = floodFillChanges(
                     cells,
                     gridLayout === "lace" ? undefined : schemeSizeForLayout,
                     gridLayout,
                     cell.row,
                     cell.col,
                     selectedColorIndex,
-                    cellSizePx,
                 );
 
-                for (const { row, col } of region) {
-                    onCellPaletteIndexChange(row, col, selectedColorIndex, {
-                        stroke: true,
-                    });
-                }
-
-                onCellEditStrokeEnd();
+                onCellEditBatch(changes);
                 return;
             }
 
@@ -498,7 +500,7 @@ export function PatternPreview({
             editTool,
             gridLayout,
             onCellPaletteIndexChange,
-            onCellEditStrokeEnd,
+            onCellEditBatch,
             previewZoom,
             selectedColorIndex,
             schemeSizeForLayout,

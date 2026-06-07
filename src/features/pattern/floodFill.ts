@@ -1,110 +1,11 @@
-import {
-    isLaceStructuralHole,
-    laceGridCellCenter,
-    type BrickCell,
-    type GridLayout,
-} from "../../beadMath";
-import { cellKey } from "./cellEditHistory";
+import { type BrickCell, type GridLayout } from "../../beadMath";
+import { type CellEditChange, cellKey } from "./cellEditHistory";
 import type { SchemeSizeBeads } from "./schemeGrid";
 
 export type GridCoord = {
     row: number;
     col: number;
 };
-
-/** Максимальна відстань між центрами сусідніх бісеринок (× cellSize). */
-const LACE_ADJACENCY_FACTOR = 1.02;
-
-function isInScheme(
-    row: number,
-    col: number,
-    layout: GridLayout,
-    schemeSize: SchemeSizeBeads | undefined,
-): boolean {
-    if (layout === "lace" || !schemeSize) return true;
-
-    return (
-        row >= 0 &&
-        row < schemeSize.height &&
-        col >= 0 &&
-        col < schemeSize.width
-    );
-}
-
-function isBlockedCell(row: number, col: number, layout: GridLayout): boolean {
-    return layout === "lace" && isLaceStructuralHole(row, col);
-}
-
-function computeLaceOriginFromCells(
-    cells: BrickCell[],
-    cellSize: number,
-): { originX: number; originY: number } {
-    let minRow = Infinity;
-    let maxRow = -Infinity;
-    let minCol = Infinity;
-    let maxCol = -Infinity;
-
-    for (const cell of cells) {
-        minRow = Math.min(minRow, cell.row);
-        maxRow = Math.max(maxRow, cell.row);
-        minCol = Math.min(minCol, cell.col);
-        maxCol = Math.max(maxCol, cell.col);
-    }
-
-    if (!Number.isFinite(minRow)) {
-        return { originX: 0, originY: 0 };
-    }
-
-    return {
-        originX: ((minCol + maxCol) / 2 + 0.5) * cellSize,
-        originY: ((minRow + maxRow) / 2 + 0.5) * cellSize,
-    };
-}
-
-export function getConnectedNeighbors(
-    row: number,
-    col: number,
-    layout: GridLayout,
-    schemeSize: SchemeSizeBeads | undefined,
-): GridCoord[] {
-    let candidates: GridCoord[];
-
-    if (layout === "brick") {
-        candidates = [
-            { row, col: col - 1 },
-            { row, col: col + 1 },
-        ];
-
-        if (row % 2 === 0) {
-            candidates.push(
-                { row: row - 1, col: col - 1 },
-                { row: row - 1, col },
-                { row: row + 1, col: col - 1 },
-                { row: row + 1, col },
-            );
-        } else {
-            candidates.push(
-                { row: row - 1, col },
-                { row: row - 1, col: col + 1 },
-                { row: row + 1, col },
-                { row: row + 1, col: col + 1 },
-            );
-        }
-    } else {
-        candidates = [
-            { row: row - 1, col },
-            { row: row + 1, col },
-            { row, col: col - 1 },
-            { row, col: col + 1 },
-        ];
-    }
-
-    return candidates.filter(
-        (neighbor) =>
-            isInScheme(neighbor.row, neighbor.col, layout, schemeSize) &&
-            !isBlockedCell(neighbor.row, neighbor.col, layout),
-    );
-}
 
 export function buildPaletteIndexLookup(
     cells: BrickCell[],
@@ -118,114 +19,64 @@ export function buildPaletteIndexLookup(
     return lookup;
 }
 
-function floodFillGridRegion(
-    lookup: Map<string, number>,
-    schemeSize: SchemeSizeBeads | undefined,
+/**
+ * Список 4-зв'язних сусідів для будь-якого типу сітки.
+ * Для «Цегли» враховується зміщення непарних рядків.
+ * Для «Прямої» та «Ажурної» — стандартні 4 напрямки.
+ * Структурні дірки «Ажурної» блокуються через lookup (paletteIndex = -1),
+ * тому тут ніяких додаткових перевірок не треба.
+ */
+function candidates(
+    row: number,
+    col: number,
     layout: GridLayout,
-    startRow: number,
-    startCol: number,
-    sourceIndex: number,
 ): GridCoord[] {
-    const visited = new Set<string>();
-    const queue: GridCoord[] = [{ row: startRow, col: startCol }];
-    const result: GridCoord[] = [];
+    if (layout === "brick") {
+        const base: GridCoord[] = [
+            { row, col: col - 1 },
+            { row, col: col + 1 },
+        ];
 
-    while (queue.length > 0) {
-        const current = queue.shift();
-        if (!current) continue;
-
-        const key = cellKey(current.row, current.col);
-        if (visited.has(key)) continue;
-
-        const paletteIndex = lookup.get(key) ?? -1;
-        if (paletteIndex !== sourceIndex) continue;
-
-        visited.add(key);
-        result.push(current);
-
-        for (const neighbor of getConnectedNeighbors(
-            current.row,
-            current.col,
-            layout,
-            schemeSize,
-        )) {
-            const neighborKey = cellKey(neighbor.row, neighbor.col);
-            if (!visited.has(neighborKey)) {
-                queue.push(neighbor);
-            }
+        if (row % 2 === 0) {
+            base.push(
+                { row: row - 1, col: col - 1 },
+                { row: row - 1, col },
+                { row: row + 1, col: col - 1 },
+                { row: row + 1, col },
+            );
+        } else {
+            base.push(
+                { row: row - 1, col },
+                { row: row - 1, col: col + 1 },
+                { row: row + 1, col },
+                { row: row + 1, col: col + 1 },
+            );
         }
+
+        return base;
     }
 
-    return result;
+    return [
+        { row: row - 1, col },
+        { row: row + 1, col },
+        { row, col: col - 1 },
+        { row, col: col + 1 },
+    ];
 }
 
-function floodFillLaceRegion(
-    cells: BrickCell[],
-    lookup: Map<string, number>,
-    cellSize: number,
-    startRow: number,
-    startCol: number,
-    sourceIndex: number,
-): GridCoord[] {
-    const { originX, originY } = computeLaceOriginFromCells(cells, cellSize);
-    const threshold = cellSize * LACE_ADJACENCY_FACTOR;
-    const thresholdSq = threshold * threshold;
+function inScheme(
+    row: number,
+    col: number,
+    schemeSize: SchemeSizeBeads | undefined,
+): boolean {
+    if (!schemeSize) return true;
 
-    const sameColorCoords: GridCoord[] = [];
-
-    for (const cell of cells) {
-        if (isLaceStructuralHole(cell.row, cell.col)) continue;
-
-        const key = cellKey(cell.row, cell.col);
-        if ((lookup.get(key) ?? -1) !== sourceIndex) continue;
-
-        sameColorCoords.push({ row: cell.row, col: cell.col });
-    }
-
-    const positions = new Map<string, { x: number; y: number }>();
-
-    for (const { row, col } of sameColorCoords) {
-        positions.set(
-            cellKey(row, col),
-            laceGridCellCenter(row, col, cellSize, originX, originY),
-        );
-    }
-
-    const visited = new Set<string>();
-    const queue: GridCoord[] = [{ row: startRow, col: startCol }];
-    const result: GridCoord[] = [];
-
-    while (queue.length > 0) {
-        const current = queue.shift();
-        if (!current) continue;
-
-        const key = cellKey(current.row, current.col);
-        if (visited.has(key)) continue;
-        if ((lookup.get(key) ?? -1) !== sourceIndex) continue;
-
-        const pos = positions.get(key);
-        if (!pos) continue;
-
-        visited.add(key);
-        result.push(current);
-
-        for (const other of sameColorCoords) {
-            const otherKey = cellKey(other.row, other.col);
-            if (visited.has(otherKey)) continue;
-
-            const otherPos = positions.get(otherKey);
-            if (!otherPos) continue;
-
-            const dx = pos.x - otherPos.x;
-            const dy = pos.y - otherPos.y;
-
-            if (dx * dx + dy * dy <= thresholdSq) {
-                queue.push(other);
-            }
-        }
-    }
-
-    return result;
+    return (
+        row >= 0 &&
+        row < schemeSize.height &&
+        col >= 0 &&
+        col < schemeSize.width
+    );
 }
 
 export function floodFillRegion(
@@ -235,32 +86,72 @@ export function floodFillRegion(
     startRow: number,
     startCol: number,
     targetIndex: number,
-    cellSize = 1,
 ): GridCoord[] {
     const lookup = buildPaletteIndexLookup(cells);
-    const sourceIndex = lookup.get(cellKey(startRow, startCol)) ?? -1;
+
+    const startKey = cellKey(startRow, startCol);
+    const sourceIndex = lookup.get(startKey) ?? -1;
 
     if (sourceIndex < 0 || sourceIndex === targetIndex) {
         return [];
     }
 
-    if (layout === "lace") {
-        return floodFillLaceRegion(
-            cells,
-            lookup,
-            cellSize,
-            startRow,
-            startCol,
-            sourceIndex,
-        );
+    // Для «Ажурної» сітки не передаємо schemeSize, щоб не обрізати від'ємні координати.
+    const bounds = layout === "lace" ? undefined : schemeSize;
+
+    const visited = new Set<string>();
+    const queue: GridCoord[] = [{ row: startRow, col: startCol }];
+    const result: GridCoord[] = [];
+
+    while (queue.length > 0) {
+        const current = queue.shift()!;
+        const key = cellKey(current.row, current.col);
+
+        if (visited.has(key)) continue;
+        visited.add(key);
+
+        const paletteIndex = lookup.get(key) ?? -1;
+        if (paletteIndex !== sourceIndex) continue;
+
+        result.push(current);
+
+        for (const neighbor of candidates(current.row, current.col, layout)) {
+            const nk = cellKey(neighbor.row, neighbor.col);
+            if (!visited.has(nk) && inScheme(neighbor.row, neighbor.col, bounds)) {
+                queue.push(neighbor);
+            }
+        }
     }
 
-    return floodFillGridRegion(
-        lookup,
+    return result;
+}
+
+export function floodFillChanges(
+    cells: BrickCell[],
+    schemeSize: SchemeSizeBeads | undefined,
+    layout: GridLayout,
+    startRow: number,
+    startCol: number,
+    targetIndex: number,
+): CellEditChange[] {
+    const lookup = buildPaletteIndexLookup(cells);
+
+    const region = floodFillRegion(
+        cells,
         schemeSize,
         layout,
         startRow,
         startCol,
-        sourceIndex,
+        targetIndex,
     );
+
+    const changes: CellEditChange[] = [];
+
+    for (const { row, col } of region) {
+        const from = lookup.get(cellKey(row, col)) ?? -1;
+        if (from === targetIndex) continue;
+        changes.push({ row, col, from, to: targetIndex });
+    }
+
+    return changes;
 }
