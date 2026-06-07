@@ -5,6 +5,11 @@ import {
     type GridLayout,
     type RGB,
 } from "../../beadMath";
+
+export type SchemeSizeBeads = {
+    width: number;
+    height: number;
+};
 export type CanvasBackground = "checkerboard" | "white" | "black";
 
 export type PaintBrickPreviewOptions = {
@@ -13,6 +18,7 @@ export type PaintBrickPreviewOptions = {
     layout: GridLayout;
     canvasBackground: CanvasBackground;
     labelPaletteIndices?: boolean;
+    schemeSize?: SchemeSizeBeads;
 };
 
 export type BrickLayoutMetrics = {
@@ -39,9 +45,40 @@ export function computeBrickLayout(
     zoom: number,
     pad: number,
     layout: GridLayout,
+    schemeSize?: SchemeSizeBeads,
 ): BrickLayoutMetrics {
     const cs = cellSize * zoom;
     const radius = cs * 0.48;
+
+    const useFixedScheme =
+        schemeSize &&
+        schemeSize.width > 0 &&
+        schemeSize.height > 0 &&
+        layout !== "lace";
+
+    if (useFixedScheme) {
+        const rows = schemeSize.height;
+        const maxCol = schemeSize.width - 1;
+
+        const canvasWidth =
+            layout === "brick"
+                ? pad * 2 + (maxCol + 1) * cs + cs / 2
+                : pad * 2 + (maxCol + 1) * cs;
+        const canvasHeight = pad * 2 + rows * cs;
+
+        return {
+            canvasWidth,
+            canvasHeight,
+            cs,
+            radius,
+            pad,
+            layout,
+            laceOriginX: 0,
+            laceOriginY: 0,
+            laceOffsetX: pad,
+            laceOffsetY: pad,
+        };
+    }
 
     let maxCol = 0;
     for (const cell of cells) {
@@ -255,6 +292,125 @@ export function drawCanvasBackground(
     ctx.fillRect(x, y, w, h);
 }
 
+export function getCanvasPointerCoords(
+    canvas: HTMLCanvasElement,
+    clientX: number,
+    clientY: number,
+): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY,
+    };
+}
+
+export function pickSchemeCellAtCanvas(
+    canvasX: number,
+    canvasY: number,
+    schemeSize: SchemeSizeBeads,
+    cellSize: number,
+    zoom: number,
+    pad: number,
+    layout: GridLayout,
+): { row: number; col: number } | null {
+    if (
+        layout === "lace" ||
+        schemeSize.width <= 0 ||
+        schemeSize.height <= 0
+    ) {
+        return null;
+    }
+
+    const metrics = computeBrickLayout(
+        [],
+        cellSize,
+        zoom,
+        pad,
+        layout,
+        schemeSize,
+    );
+    const { cs, radius } = metrics;
+
+    const row = Math.floor((canvasY - pad) / cs);
+    if (row < 0 || row >= schemeSize.height) return null;
+
+    const rowOffset = layout === "brick" && row % 2 === 1 ? cs / 2 : 0;
+    const col = Math.floor((canvasX - pad - rowOffset) / cs);
+    if (col < 0 || col >= schemeSize.width) return null;
+
+    const probe: BrickCell = {
+        row,
+        col,
+        avg: { r: 0, g: 0, b: 0 },
+        paletteIndex: -1,
+    };
+    const { cx, cy } = getBrickCellCenter(probe, metrics);
+    const dist = Math.hypot(canvasX - cx, canvasY - cy);
+
+    if (dist > radius) return null;
+
+    return { row, col };
+}
+
+export function hitTestBrickCell(
+    canvasX: number,
+    canvasY: number,
+    cells: BrickCell[],
+    cellSize: number,
+    zoom: number,
+    pad: number,
+    layout: GridLayout,
+    schemeSize?: SchemeSizeBeads,
+): BrickCell | null {
+    if (schemeSize && layout !== "lace") {
+        const pick = pickSchemeCellAtCanvas(
+            canvasX,
+            canvasY,
+            schemeSize,
+            cellSize,
+            zoom,
+            pad,
+            layout,
+        );
+
+        if (!pick) return null;
+
+        const found = cells.find(
+            (cell) => cell.row === pick.row && cell.col === pick.col,
+        );
+
+        return (
+            found ?? {
+                row: pick.row,
+                col: pick.col,
+                avg: { r: 255, g: 255, b: 255 },
+                paletteIndex: -1,
+            }
+        );
+    }
+
+    const metrics = computeBrickLayout(cells, cellSize, zoom, pad, layout);
+    const { radius } = metrics;
+
+    let best: BrickCell | null = null;
+    let bestDist = Infinity;
+
+    for (const cell of cells) {
+        const { cx, cy } = getBrickCellCenter(cell, metrics);
+        const dist = Math.hypot(canvasX - cx, canvasY - cy);
+
+        if (dist <= radius && dist < bestDist) {
+            bestDist = dist;
+            best = cell;
+        }
+    }
+
+    return best;
+}
+
 export function paintBrickPreview(
     ctx: CanvasRenderingContext2D,
     cells: BrickCell[],
@@ -262,8 +418,16 @@ export function paintBrickPreview(
     palette: RGB[],
     options: PaintBrickPreviewOptions,
 ): void {
-    const { zoom, pad, layout, canvasBackground, labelPaletteIndices } = options;
-    const metrics = computeBrickLayout(cells, cellSize, zoom, pad, layout);
+    const { zoom, pad, layout, canvasBackground, labelPaletteIndices, schemeSize } =
+        options;
+    const metrics = computeBrickLayout(
+        cells,
+        cellSize,
+        zoom,
+        pad,
+        layout,
+        schemeSize,
+    );
 
     ctx.canvas.width = Math.max(1, Math.ceil(metrics.canvasWidth));
     ctx.canvas.height = Math.max(1, Math.ceil(metrics.canvasHeight));

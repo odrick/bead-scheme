@@ -30,6 +30,10 @@ export default function App() {
                 gridLayout: patternModel.gridLayout,
                 canvasBackground: patternModel.canvasBackground,
                 labelPaletteIndices,
+                schemeSize:
+                    patternModel.gridLayout === "lace"
+                        ? undefined
+                        : patternModel.schemeSizeBeads,
             });
 
             downloadCanvasAsPng(
@@ -69,7 +73,7 @@ export default function App() {
                         onCanvasBackgroundChange={
                             patternModel.setCanvasBackground
                         }
-                        onResetPaletteColors={patternModel.resetPaletteColors}
+                        onResetPattern={patternModel.resetPattern}
                         beadCount={patternModel.beadCount}
                         totalCells={patternModel.cells.length}
                         canExport={
@@ -95,6 +99,17 @@ export default function App() {
                         onPreviewZoomChange={patternModel.setPreviewZoom}
                         gridLayout={patternModel.gridLayout}
                         canvasBackground={patternModel.canvasBackground}
+                        onCellPaletteIndexChange={
+                            patternModel.setCellPaletteIndex
+                        }
+                        onCellEditStrokeEnd={patternModel.endCellEditStroke}
+                        onUndoCellEdit={patternModel.undoCellEdit}
+                        onRedoCellEdit={patternModel.redoCellEdit}
+                        canUndoCellEdit={patternModel.canUndoCellEdit}
+                        canRedoCellEdit={patternModel.canRedoCellEdit}
+                        schemeSizeBeads={patternModel.schemeSizeBeads}
+                        minSchemeSizeBeads={patternModel.imageGridSizeBeads}
+                        onSchemeSizeChange={patternModel.setSchemeSizeBeads}
                     />
                 </div>
 

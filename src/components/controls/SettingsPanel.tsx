@@ -29,7 +29,7 @@ type SettingsPanelProps = {
     onPreviewZoomChange: (value: number) => void;
     canvasBackground: CanvasBackground;
     onCanvasBackgroundChange: (value: CanvasBackground) => void;
-    onResetPaletteColors: () => void;
+    onResetPattern: () => void;
     beadCount: number;
     totalCells: number;
     canExport: boolean;
@@ -57,7 +57,7 @@ export function SettingsPanel({
     onPreviewZoomChange,
     canvasBackground,
     onCanvasBackgroundChange,
-    onResetPaletteColors,
+    onResetPattern,
     beadCount,
     totalCells,
     canExport,
@@ -263,7 +263,7 @@ export function SettingsPanel({
             <button
                 type="button"
                 className="recalculate-button"
-                onClick={onResetPaletteColors}
+                onClick={onResetPattern}
             >
                 Скинути
             </button>

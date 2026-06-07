@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
     buildBrickGrid,
@@ -15,6 +15,23 @@ import {
     type CanvasBackground,
 } from "../preview/canvasUtils";
 import { clampPreviewZoom } from "../preview/previewZoom";
+import {
+    applyCellEditChanges,
+    cellKey,
+    getBasePaletteIndex,
+    getEffectivePaletteIndex,
+    MAX_CELL_EDIT_HISTORY,
+    setOverrideValue,
+    type CellEditChange,
+} from "./cellEditHistory";
+import {
+    clampSchemeSize,
+    filterOverridesToScheme,
+    mapImageCellsToScheme,
+    measureImageGridBounds,
+    mergeSchemeCells,
+    type SchemeSizeBeads,
+} from "./schemeGrid";
 
 const DEFAULT_BG = "#ffffff";
 const BG_MATCH_SQ = 55 * 55;
@@ -23,6 +40,21 @@ const PALETTE_SAMPLE_STEP = 2;
 type PaletteOverrides = {
     baseKey: string;
     colors: Record<number, RGB>;
+};
+
+type CellOverrides = {
+    baseKey: string;
+    cells: Record<string, number>;
+};
+
+type EditHistoryState = {
+    baseKey: string;
+    undo: CellEditChange[][];
+    redo: CellEditChange[][];
+};
+
+type SetCellPaletteIndexOptions = {
+    stroke?: boolean;
 };
 
 type PatternModel = {
@@ -47,10 +79,24 @@ type PatternModel = {
     patternPalette: RGB[];
     setPaletteColor: (index: number, hex: string) => void;
     resetPaletteColor: (index: number) => void;
-    resetPaletteColors: () => void;
+    resetPattern: () => void;
+    setCellPaletteIndex: (
+        row: number,
+        col: number,
+        paletteIndex: number,
+        options?: SetCellPaletteIndexOptions,
+    ) => void;
+    endCellEditStroke: () => void;
+    undoCellEdit: () => void;
+    redoCellEdit: () => void;
+    canUndoCellEdit: boolean;
+    canRedoCellEdit: boolean;
     hasPattern: boolean;
     beadCount: number;
     beadCountsByPalette: number[];
+    schemeSizeBeads: SchemeSizeBeads;
+    imageGridSizeBeads: SchemeSizeBeads;
+    setSchemeSizeBeads: (width: number, height: number) => void;
 };
 
 export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
@@ -73,6 +119,26 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         baseKey: "",
         colors: {},
     });
+    const [cellOverrides, setCellOverrides] = useState<CellOverrides>({
+        baseKey: "",
+        cells: {},
+    });
+    const [editHistory, setEditHistory] = useState<EditHistoryState>({
+        baseKey: "",
+        undo: [],
+        redo: [],
+    });
+    const [schemeSizeBeads, setSchemeSizeBeadsState] = useState<SchemeSizeBeads>({
+        width: 0,
+        height: 0,
+    });
+    const bitmapRef = useRef<HTMLImageElement | null>(null);
+
+    const baseCellsRef = useRef<BrickCell[]>([]);
+    const cellOverridesRef = useRef(cellOverrides);
+    const pendingStrokeRef = useRef<Map<string, CellEditChange>>(new Map());
+
+    cellOverridesRef.current = cellOverrides;
 
     const backgroundRgb = useMemo(
         () => parseHexColor(backgroundHex),
@@ -85,9 +151,13 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         return bitmap.width / Math.max(2, beadsPerRow);
     }, [bitmap, beadsPerRow]);
 
-    const { palette, cells } = useMemo(() => {
+    const { palette, imageCells, imageGridBounds } = useMemo(() => {
         if (!bitmap || bitmap.width === 0) {
-            return { palette: [] as RGB[], cells: [] as BrickCell[] };
+            return {
+                palette: [] as RGB[],
+                imageCells: [] as BrickCell[],
+                imageGridBounds: measureImageGridBounds([]),
+            };
         }
 
         const imageData = loadImageToImageData(bitmap);
@@ -100,12 +170,13 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             ...backgroundFilter,
             sampleStep: PALETTE_SAMPLE_STEP,
         });
-        const cells = buildBrickGrid(imageData, cellSizePx, palette, {
+        const imageCells = buildBrickGrid(imageData, cellSizePx, palette, {
             ...backgroundFilter,
             layout: gridLayout,
         });
+        const imageGridBounds = measureImageGridBounds(imageCells);
 
-        return { palette, cells };
+        return { palette, imageCells, imageGridBounds };
     }, [
         bitmap,
         paletteSize,
@@ -114,6 +185,92 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         backgroundMode,
         gridLayout,
     ]);
+
+    const imageGridSizeBeads = useMemo(
+        () => ({
+            width: imageGridBounds.width,
+            height: imageGridBounds.height,
+        }),
+        [imageGridBounds.width, imageGridBounds.height],
+    );
+
+    useEffect(() => {
+        if (bitmap !== bitmapRef.current) {
+            bitmapRef.current = bitmap;
+            setSchemeSizeBeadsState({
+                width: imageGridSizeBeads.width,
+                height: imageGridSizeBeads.height,
+            });
+            return;
+        }
+
+        setSchemeSizeBeadsState((current) =>
+            clampSchemeSize({
+                width: Math.max(current.width, imageGridSizeBeads.width),
+                height: Math.max(current.height, imageGridSizeBeads.height),
+            }),
+        );
+    }, [bitmap, imageGridSizeBeads.width, imageGridSizeBeads.height]);
+
+    const baseCells = useMemo(
+        () =>
+            mapImageCellsToScheme(
+                imageCells,
+                imageGridBounds,
+                schemeSizeBeads,
+            ),
+        [imageCells, imageGridBounds, schemeSizeBeads],
+    );
+
+    baseCellsRef.current = baseCells;
+
+    const cellsBaseKey = useMemo(
+        () =>
+            [
+                bitmap?.width ?? 0,
+                bitmap?.height ?? 0,
+                paletteSize,
+                beadsPerRow,
+                backgroundMode,
+                backgroundHex,
+                gridLayout,
+                palette.map((color) => `${color.r},${color.g},${color.b}`).join("|"),
+                schemeSizeBeads.width,
+                schemeSizeBeads.height,
+            ].join(":"),
+        [
+            bitmap,
+            paletteSize,
+            beadsPerRow,
+            backgroundMode,
+            backgroundHex,
+            gridLayout,
+            palette,
+            schemeSizeBeads.width,
+            schemeSizeBeads.height,
+        ],
+    );
+
+    useEffect(() => {
+        pendingStrokeRef.current.clear();
+        setEditHistory((current) =>
+            current.baseKey === cellsBaseKey
+                ? current
+                : { baseKey: cellsBaseKey, undo: [], redo: [] },
+        );
+    }, [cellsBaseKey]);
+
+    const cells = useMemo(() => {
+        const overrides =
+            cellOverrides.baseKey === cellsBaseKey ? cellOverrides.cells : {};
+
+        return mergeSchemeCells(
+            baseCells,
+            overrides,
+            schemeSizeBeads,
+            gridLayout,
+        );
+    }, [baseCells, cellOverrides, cellsBaseKey, schemeSizeBeads, gridLayout]);
 
     const paletteBaseKey = useMemo(
         () => palette.map((color) => `${color.r},${color.g},${color.b}`).join("|"),
@@ -164,9 +321,203 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         [paletteBaseKey],
     );
 
-    const resetPaletteColors = useCallback(() => {
+    const resetPattern = useCallback(() => {
+        pendingStrokeRef.current.clear();
+
         setPaletteOverrides({ baseKey: paletteBaseKey, colors: {} });
-    }, [paletteBaseKey]);
+
+        const emptyCellOverrides = { baseKey: cellsBaseKey, cells: {} };
+        setCellOverrides(emptyCellOverrides);
+        cellOverridesRef.current = emptyCellOverrides;
+
+        setEditHistory({ baseKey: cellsBaseKey, undo: [], redo: [] });
+
+        setSchemeSizeBeadsState({
+            width: imageGridSizeBeads.width,
+            height: imageGridSizeBeads.height,
+        });
+    }, [paletteBaseKey, cellsBaseKey, imageGridSizeBeads.width, imageGridSizeBeads.height]);
+
+    const setSchemeSizeBeads = useCallback(
+        (width: number, height: number) => {
+            const next = clampSchemeSize({
+                width: Math.max(width, imageGridSizeBeads.width),
+                height: Math.max(height, imageGridSizeBeads.height),
+            });
+
+            setSchemeSizeBeadsState(next);
+
+            setCellOverrides((current) => {
+                const cells =
+                    current.baseKey === cellsBaseKey ? current.cells : {};
+                const filtered = filterOverridesToScheme(cells, next);
+
+                const nextOverrides = {
+                    baseKey: cellsBaseKey,
+                    cells: filtered,
+                };
+                cellOverridesRef.current = nextOverrides;
+                return nextOverrides;
+            });
+
+            pendingStrokeRef.current.clear();
+            setEditHistory({ baseKey: cellsBaseKey, undo: [], redo: [] });
+        },
+        [cellsBaseKey, imageGridSizeBeads.width, imageGridSizeBeads.height],
+    );
+
+    const setCellPaletteIndex = useCallback(
+        (
+            row: number,
+            col: number,
+            paletteIndex: number,
+            options?: SetCellPaletteIndexOptions,
+        ) => {
+            const key = cellKey(row, col);
+            const currentOverrides =
+                cellOverridesRef.current.baseKey === cellsBaseKey
+                    ? cellOverridesRef.current.cells
+                    : {};
+            const currentEffective = getEffectivePaletteIndex(
+                baseCellsRef.current,
+                currentOverrides,
+                row,
+                col,
+            );
+
+            if (currentEffective === paletteIndex) return;
+
+            if (options?.stroke) {
+                const pending = pendingStrokeRef.current;
+                const existing = pending.get(key);
+
+                if (existing) {
+                    existing.to = paletteIndex;
+                } else {
+                    pending.set(key, {
+                        row,
+                        col,
+                        from: currentEffective,
+                        to: paletteIndex,
+                    });
+                }
+            }
+
+            const baseIndex = getBasePaletteIndex(
+                baseCellsRef.current,
+                row,
+                col,
+            );
+
+            setCellOverrides((current) => {
+                const cells =
+                    current.baseKey === cellsBaseKey ? current.cells : {};
+                const nextCells = setOverrideValue(
+                    cells,
+                    key,
+                    paletteIndex,
+                    baseIndex,
+                );
+                const next = { baseKey: cellsBaseKey, cells: nextCells };
+                cellOverridesRef.current = next;
+                return next;
+            });
+        },
+        [cellsBaseKey],
+    );
+
+    const endCellEditStroke = useCallback(() => {
+        const changes = [...pendingStrokeRef.current.values()];
+        pendingStrokeRef.current.clear();
+
+        if (changes.length === 0) return;
+
+        setEditHistory((current) => {
+            const undo =
+                current.baseKey === cellsBaseKey
+                    ? [...current.undo, changes]
+                    : [changes];
+
+            while (undo.length > MAX_CELL_EDIT_HISTORY) {
+                undo.shift();
+            }
+
+            return {
+                baseKey: cellsBaseKey,
+                undo,
+                redo: [],
+            };
+        });
+    }, [cellsBaseKey]);
+
+    const undoCellEdit = useCallback(() => {
+        setEditHistory((current) => {
+            if (current.baseKey !== cellsBaseKey || current.undo.length === 0) {
+                return current;
+            }
+
+            const changes = current.undo[current.undo.length - 1];
+
+            setCellOverrides((overrides) => {
+                const cells =
+                    overrides.baseKey === cellsBaseKey
+                        ? overrides.cells
+                        : {};
+                const nextCells = applyCellEditChanges(
+                    baseCellsRef.current,
+                    cells,
+                    changes,
+                    true,
+                );
+                const next = { baseKey: cellsBaseKey, cells: nextCells };
+                cellOverridesRef.current = next;
+                return next;
+            });
+
+            return {
+                baseKey: cellsBaseKey,
+                undo: current.undo.slice(0, -1),
+                redo: [...current.redo, changes],
+            };
+        });
+    }, [cellsBaseKey]);
+
+    const redoCellEdit = useCallback(() => {
+        setEditHistory((current) => {
+            if (current.baseKey !== cellsBaseKey || current.redo.length === 0) {
+                return current;
+            }
+
+            const changes = current.redo[current.redo.length - 1];
+
+            setCellOverrides((overrides) => {
+                const cells =
+                    overrides.baseKey === cellsBaseKey
+                        ? overrides.cells
+                        : {};
+                const nextCells = applyCellEditChanges(
+                    baseCellsRef.current,
+                    cells,
+                    changes,
+                    false,
+                );
+                const next = { baseKey: cellsBaseKey, cells: nextCells };
+                cellOverridesRef.current = next;
+                return next;
+            });
+
+            return {
+                baseKey: cellsBaseKey,
+                undo: [...current.undo, changes],
+                redo: current.redo.slice(0, -1),
+            };
+        });
+    }, [cellsBaseKey]);
+
+    const canUndoCellEdit =
+        editHistory.baseKey === cellsBaseKey && editHistory.undo.length > 0;
+    const canRedoCellEdit =
+        editHistory.baseKey === cellsBaseKey && editHistory.redo.length > 0;
 
     const hasPattern = useMemo(
         () => cells.some((cell) => cell.paletteIndex >= 0),
@@ -205,9 +556,18 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         patternPalette,
         setPaletteColor,
         resetPaletteColor,
-        resetPaletteColors,
+        resetPattern,
+        setCellPaletteIndex,
+        endCellEditStroke,
+        undoCellEdit,
+        redoCellEdit,
+        canUndoCellEdit,
+        canRedoCellEdit,
         hasPattern,
         beadCount,
         beadCountsByPalette,
+        schemeSizeBeads,
+        imageGridSizeBeads,
+        setSchemeSizeBeads,
     };
 }

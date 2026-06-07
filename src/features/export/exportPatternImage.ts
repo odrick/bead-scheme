@@ -10,6 +10,7 @@ import {
     drawCanvasBackground,
     paintBrickCells,
     type CanvasBackground,
+    type SchemeSizeBeads,
 } from "../preview/canvasUtils";
 
 /**
@@ -64,6 +65,7 @@ export type ExportPatternInput = {
     gridLayout: GridLayout;
     canvasBackground: CanvasBackground;
     labelPaletteIndices: boolean;
+    schemeSize?: SchemeSizeBeads;
 };
 
 function schemeExportZoom(
@@ -71,8 +73,16 @@ function schemeExportZoom(
     cellSizePx: number,
     pad: number,
     layout: GridLayout,
+    schemeSize?: SchemeSizeBeads,
 ): number {
-    const natural = computeBrickLayout(cells, cellSizePx, 1, pad, layout);
+    const natural = computeBrickLayout(
+        cells,
+        cellSizePx,
+        1,
+        pad,
+        layout,
+        schemeSize,
+    );
     const maxSide = Math.max(
         1,
         natural.canvasWidth,
@@ -233,6 +243,7 @@ function renderSchemeCanvas(input: ExportPatternInput): HTMLCanvasElement {
         input.cellSizePx,
         pad,
         input.gridLayout,
+        input.schemeSize,
     );
     const metrics = computeBrickLayout(
         input.cells,
@@ -240,6 +251,7 @@ function renderSchemeCanvas(input: ExportPatternInput): HTMLCanvasElement {
         zoom,
         pad,
         input.gridLayout,
+        input.schemeSize,
     );
 
     const canvas = document.createElement("canvas");
