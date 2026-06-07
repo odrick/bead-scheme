@@ -1,4 +1,5 @@
 import {
+    isLaceStructuralHole,
     laceGridCellCenter,
     rgbToCss,
     type BrickCell,
@@ -51,10 +52,7 @@ export function computeBrickLayout(
     const radius = cs * 0.48;
 
     const useFixedScheme =
-        schemeSize &&
-        schemeSize.width > 0 &&
-        schemeSize.height > 0 &&
-        layout !== "lace";
+        schemeSize && schemeSize.width > 0 && schemeSize.height > 0 && layout !== "lace";
 
     if (useFixedScheme) {
         const rows = schemeSize.height;
@@ -126,10 +124,24 @@ export function computeBrickLayout(
             minY = Math.min(minY, y);
             maxY = Math.max(maxY, y);
         }
-        laceOffsetX = pad - minX;
-        laceOffsetY = pad - minY;
-        canvasWidth = pad * 2 + (maxX - minX);
-        canvasHeight = pad * 2 + (maxY - minY);
+
+        const naturalW = maxX - minX;
+        const naturalH = maxY - minY;
+
+        // Якщо задано schemeSize — канвас розширюється до візуального розміру в бісеринках.
+        const effectiveW =
+            schemeSize && schemeSize.width > 0
+                ? Math.max(naturalW, schemeSize.width * cs)
+                : naturalW;
+        const effectiveH =
+            schemeSize && schemeSize.height > 0
+                ? Math.max(naturalH, schemeSize.height * cs)
+                : naturalH;
+
+        laceOffsetX = pad + (effectiveW - naturalW) / 2 - minX;
+        laceOffsetY = pad + (effectiveH - naturalH) / 2 - minY;
+        canvasWidth = pad * 2 + effectiveW;
+        canvasHeight = pad * 2 + effectiveH;
     } else {
         canvasWidth =
             layout === "brick"
@@ -307,50 +319,40 @@ export function getCanvasPointerCoords(
     };
 }
 
-export function pickSchemeCellAtCanvas(
+/**
+ * Зворотнє перетворення для ажурної сітки:
+ * з canvas-координат (cx, cy) визначаємо row/col бісеринки.
+ * Використовує ту саму математику, що й laceGridCellCenter, але в зворотному напрямку.
+ */
+function laceCellFromCanvas(
     canvasX: number,
     canvasY: number,
-    schemeSize: SchemeSizeBeads,
-    cellSize: number,
-    zoom: number,
-    pad: number,
-    layout: GridLayout,
+    metrics: BrickLayoutMetrics,
 ): { row: number; col: number } | null {
-    if (
-        layout === "lace" ||
-        schemeSize.width <= 0 ||
-        schemeSize.height <= 0
-    ) {
-        return null;
-    }
+    const { cs, laceOriginX, laceOriginY, laceOffsetX, laceOffsetY } = metrics;
 
-    const metrics = computeBrickLayout(
-        [],
-        cellSize,
-        zoom,
-        pad,
-        layout,
-        schemeSize,
-    );
-    const { cs, radius } = metrics;
+    // Прибираємо зміщення канвасу → фізичні координати у просторі laceGridCellCenter
+    const px = canvasX - laceOffsetX;
+    const py = canvasY - laceOffsetY;
 
-    const row = Math.floor((canvasY - pad) / cs);
-    if (row < 0 || row >= schemeSize.height) return null;
+    // laceGridCellCenter: x = originX + (gx-originX)*cos - (gy-originY)*sin
+    //                     y = originY + (gx-originX)*sin + (gy-originY)*cos, cos=sin=1/√2
+    // Звідси: gx = originX + (lx+ly)/√2, gy = originY + (ly-lx)/√2
+    const lx = px - laceOriginX;
+    const ly = py - laceOriginY;
+    const gx = laceOriginX + (lx + ly) * Math.SQRT1_2;
+    const gy = laceOriginY + (ly - lx) * Math.SQRT1_2;
 
-    const rowOffset = layout === "brick" && row % 2 === 1 ? cs / 2 : 0;
-    const col = Math.floor((canvasX - pad - rowOffset) / cs);
-    if (col < 0 || col >= schemeSize.width) return null;
+    const col = Math.round((gx - cs / 2) / cs);
+    const row = Math.round((gy - cs / 2) / cs);
 
-    const probe: BrickCell = {
-        row,
-        col,
-        avg: { r: 0, g: 0, b: 0 },
-        paletteIndex: -1,
-    };
+    if (isLaceStructuralHole(row, col)) return null;
+
+    // Перевіряємо, що точка дійсно потрапляє в радіус бісеринки
+    const probe: BrickCell = { row, col, avg: { r: 255, g: 255, b: 255 }, paletteIndex: -1 };
     const { cx, cy } = getBrickCellCenter(probe, metrics);
-    const dist = Math.hypot(canvasX - cx, canvasY - cy);
 
-    if (dist > radius) return null;
+    if (Math.hypot(canvasX - cx, canvasY - cy) > metrics.radius) return null;
 
     return { row, col };
 }
@@ -365,25 +367,14 @@ export function hitTestBrickCell(
     layout: GridLayout,
     schemeSize?: SchemeSizeBeads,
 ): BrickCell | null {
-    if (schemeSize && layout !== "lace") {
-        const pick = pickSchemeCellAtCanvas(
-            canvasX,
-            canvasY,
-            schemeSize,
-            cellSize,
-            zoom,
-            pad,
-            layout,
-        );
+    const metrics = computeBrickLayout(cells, cellSize, zoom, pad, layout, schemeSize);
 
+    if (layout === "lace") {
+        const pick = laceCellFromCanvas(canvasX, canvasY, metrics);
         if (!pick) return null;
 
-        const found = cells.find(
-            (cell) => cell.row === pick.row && cell.col === pick.col,
-        );
-
         return (
-            found ?? {
+            cells.find((c) => c.row === pick.row && c.col === pick.col) ?? {
                 row: pick.row,
                 col: pick.col,
                 avg: { r: 255, g: 255, b: 255 },
@@ -392,8 +383,28 @@ export function hitTestBrickCell(
         );
     }
 
-    const metrics = computeBrickLayout(cells, cellSize, zoom, pad, layout);
-    const { radius } = metrics;
+    if (schemeSize && schemeSize.width > 0 && schemeSize.height > 0) {
+        const { cs } = metrics;
+        const row = Math.floor((canvasY - pad) / cs);
+        if (row < 0 || row >= schemeSize.height) return null;
+
+        const rowOffset = layout === "brick" && row % 2 === 1 ? cs / 2 : 0;
+        const col = Math.floor((canvasX - pad - rowOffset) / cs);
+        if (col < 0 || col >= schemeSize.width) return null;
+
+        const probe: BrickCell = { row, col, avg: { r: 0, g: 0, b: 0 }, paletteIndex: -1 };
+        const { cx, cy } = getBrickCellCenter(probe, metrics);
+        if (Math.hypot(canvasX - cx, canvasY - cy) > metrics.radius) return null;
+
+        return (
+            cells.find((c) => c.row === row && c.col === col) ?? {
+                row,
+                col,
+                avg: { r: 255, g: 255, b: 255 },
+                paletteIndex: -1,
+            }
+        );
+    }
 
     let best: BrickCell | null = null;
     let bestDist = Infinity;
@@ -402,7 +413,7 @@ export function hitTestBrickCell(
         const { cx, cy } = getBrickCellCenter(cell, metrics);
         const dist = Math.hypot(canvasX - cx, canvasY - cy);
 
-        if (dist <= radius && dist < bestDist) {
+        if (dist <= metrics.radius && dist < bestDist) {
             bestDist = dist;
             best = cell;
         }

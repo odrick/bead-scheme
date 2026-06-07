@@ -30,10 +30,7 @@ export default function App() {
                 gridLayout: patternModel.gridLayout,
                 canvasBackground: patternModel.canvasBackground,
                 labelPaletteIndices,
-                schemeSize:
-                    patternModel.gridLayout === "lace"
-                        ? undefined
-                        : patternModel.schemeSizeBeads,
+                schemeSize: patternModel.schemeSizeBeads,
             });
 
             downloadCanvasAsPng(

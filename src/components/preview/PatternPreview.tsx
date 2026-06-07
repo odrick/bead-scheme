@@ -276,14 +276,12 @@ function PatternColorCombobox({
 type PatternSchemeSizeControlsProps = {
     schemeSize: SchemeSizeBeads;
     minSchemeSize: SchemeSizeBeads;
-    disabled: boolean;
     onChange: (width: number, height: number) => void;
 };
 
 function PatternSchemeSizeControls({
     schemeSize,
     minSchemeSize,
-    disabled,
     onChange,
 }: PatternSchemeSizeControlsProps) {
     const [widthDraft, setWidthDraft] = useState(String(schemeSize.width));
@@ -310,11 +308,7 @@ function PatternSchemeSizeControls({
     return (
         <div
             className="pattern-scheme-size"
-            title={
-                disabled
-                    ? "Розмір схеми доступний для сіток «Цегла» та «Пряма»"
-                    : "Розмір схеми в бісеринках (ширина × висота)"
-            }
+            title="Розмір схеми в бісеринках (ширина × висота)"
         >
             <label className="pattern-scheme-size-field">
                 <span className="pattern-scheme-size-label">Ш</span>
@@ -323,7 +317,6 @@ function PatternSchemeSizeControls({
                     min={minSchemeSize.width}
                     max={800}
                     value={widthDraft}
-                    disabled={disabled}
                     aria-label="Ширина схеми в бісеринках"
                     onChange={(event) => setWidthDraft(event.target.value)}
                     onBlur={commit}
@@ -344,7 +337,6 @@ function PatternSchemeSizeControls({
                     min={minSchemeSize.height}
                     max={800}
                     value={heightDraft}
-                    disabled={disabled}
                     aria-label="Висота схеми в бісеринках"
                     onChange={(event) => setHeightDraft(event.target.value)}
                     onBlur={commit}
@@ -379,8 +371,6 @@ export function PatternPreview({
     minSchemeSizeBeads,
     onSchemeSizeChange,
 }: PatternPreviewProps) {
-    const schemeSizeForLayout =
-        gridLayout === "lace" ? undefined : schemeSizeBeads;
     const patternCanvasRef = useRef<HTMLCanvasElement>(null);
     const patternWrapRef = useRef<HTMLDivElement>(null);
     const isPaintingRef = useRef(false);
@@ -433,7 +423,7 @@ export function PatternPreview({
             pad: PREVIEW_PAD,
             layout: gridLayout,
             canvasBackground,
-            schemeSize: schemeSizeForLayout,
+            schemeSize: schemeSizeBeads,
         };
 
         paintBrickPreview(ctx, cells, cellSizePx, patternPalette, options);
@@ -445,7 +435,7 @@ export function PatternPreview({
         previewZoom,
         gridLayout,
         canvasBackground,
-        schemeSizeForLayout,
+        schemeSizeBeads,
     ]);
 
     const applyToolAt = useCallback(
@@ -462,7 +452,7 @@ export function PatternPreview({
                 previewZoom,
                 PREVIEW_PAD,
                 gridLayout,
-                schemeSizeForLayout,
+                schemeSizeBeads,
             );
 
             if (!cell) return;
@@ -470,7 +460,7 @@ export function PatternPreview({
             if (editTool === "fill") {
                 const changes = floodFillChanges(
                     cells,
-                    gridLayout === "lace" ? undefined : schemeSizeForLayout,
+                    schemeSizeBeads,
                     gridLayout,
                     cell.row,
                     cell.col,
@@ -503,7 +493,7 @@ export function PatternPreview({
             onCellEditBatch,
             previewZoom,
             selectedColorIndex,
-            schemeSizeForLayout,
+            schemeSizeBeads,
         ],
     );
 
@@ -683,7 +673,6 @@ export function PatternPreview({
                     <PatternSchemeSizeControls
                         schemeSize={schemeSizeBeads}
                         minSchemeSize={minSchemeSizeBeads}
-                        disabled={gridLayout === "lace"}
                         onChange={onSchemeSizeChange}
                     />
                 </div>

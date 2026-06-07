@@ -133,7 +133,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         width: 0,
         height: 0,
     });
-    const bitmapRef = useRef<HTMLImageElement | null>(null);
+    const autoSchemeSizeKeyRef = useRef("");
 
     const baseCellsRef = useRef<BrickCell[]>([]);
     const cellOverridesRef = useRef(cellOverrides);
@@ -187,41 +187,57 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         gridLayout,
     ]);
 
-    const imageGridSizeBeads = useMemo(
-        () => ({
-            width: imageGridBounds.width,
-            height: imageGridBounds.height,
-        }),
-        [imageGridBounds.width, imageGridBounds.height],
+    // Для ажурної сітки row/col-діапазон ≈ √2 більший за візуальний розмір,
+    // тому показуємо візуальний розмір у бісеринках (як і в інших типах).
+    const imageGridSizeBeads = useMemo(() => {
+        if (gridLayout === "lace" && bitmap && bitmap.width > 0) {
+            return {
+                width: beadsPerRow,
+                height: Math.max(1, Math.round(bitmap.height / Math.max(1, cellSizePx))),
+            };
+        }
+
+        return { width: imageGridBounds.width, height: imageGridBounds.height };
+    }, [gridLayout, bitmap, beadsPerRow, cellSizePx, imageGridBounds]);
+
+    const autoSchemeSizeKey = useMemo(
+        () =>
+            [
+                bitmap?.width ?? 0,
+                bitmap?.height ?? 0,
+                paletteSize,
+                beadsPerRow,
+                backgroundMode,
+                backgroundHex,
+                gridLayout,
+            ].join(":"),
+        [
+            bitmap,
+            paletteSize,
+            beadsPerRow,
+            backgroundMode,
+            backgroundHex,
+            gridLayout,
+        ],
     );
 
     useEffect(() => {
-        if (bitmap !== bitmapRef.current) {
-            bitmapRef.current = bitmap;
-            setSchemeSizeBeadsState({
-                width: imageGridSizeBeads.width,
-                height: imageGridSizeBeads.height,
-            });
-            return;
-        }
+        if (autoSchemeSizeKeyRef.current === autoSchemeSizeKey) return;
 
-        setSchemeSizeBeadsState((current) =>
-            clampSchemeSize({
-                width: Math.max(current.width, imageGridSizeBeads.width),
-                height: Math.max(current.height, imageGridSizeBeads.height),
-            }),
-        );
-    }, [bitmap, imageGridSizeBeads.width, imageGridSizeBeads.height]);
+        autoSchemeSizeKeyRef.current = autoSchemeSizeKey;
+        setSchemeSizeBeadsState({
+            width: imageGridSizeBeads.width,
+            height: imageGridSizeBeads.height,
+        });
+    }, [autoSchemeSizeKey, imageGridSizeBeads.width, imageGridSizeBeads.height]);
 
-    const baseCells = useMemo(
-        () =>
-            mapImageCellsToScheme(
-                imageCells,
-                imageGridBounds,
-                schemeSizeBeads,
-            ),
-        [imageCells, imageGridBounds, schemeSizeBeads],
-    );
+    // Для ажурної сітки клітинки зберігаємо в нативних координатах (можуть бути від'ємними).
+    // Центрування та схема-розмір обробляються в computeBrickLayout/hitTestBrickCell.
+    const baseCells = useMemo(() => {
+        if (gridLayout === "lace") return imageCells;
+
+        return mapImageCellsToScheme(imageCells, imageGridBounds, schemeSizeBeads);
+    }, [gridLayout, imageCells, imageGridBounds, schemeSizeBeads]);
 
     baseCellsRef.current = baseCells;
 
@@ -236,8 +252,9 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
                 backgroundHex,
                 gridLayout,
                 palette.map((color) => `${color.r},${color.g},${color.b}`).join("|"),
-                schemeSizeBeads.width,
-                schemeSizeBeads.height,
+                // Для ажурної розмір схеми не змінює позиції клітинок — не включаємо до ключа.
+                gridLayout !== "lace" ? schemeSizeBeads.width : 0,
+                gridLayout !== "lace" ? schemeSizeBeads.height : 0,
             ].join(":"),
         [
             bitmap,
@@ -265,12 +282,36 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         const overrides =
             cellOverrides.baseKey === cellsBaseKey ? cellOverrides.cells : {};
 
-        return mergeSchemeCells(
-            baseCells,
-            overrides,
-            schemeSizeBeads,
-            gridLayout,
-        );
+        if (gridLayout === "lace") {
+            // Нативні lace-координати — обмеження по schemeSize не застосовуємо.
+            const byKey = new Map(baseCells.map((c) => [cellKey(c.row, c.col), c]));
+
+            for (const [key, paletteIndex] of Object.entries(overrides)) {
+                const existing = byKey.get(key);
+
+                if (existing) {
+                    byKey.set(key, { ...existing, paletteIndex });
+                    continue;
+                }
+
+                const [rowStr, colStr] = key.split(",");
+                const row = Number.parseInt(rowStr, 10);
+                const col = Number.parseInt(colStr, 10);
+
+                if (!Number.isNaN(row) && !Number.isNaN(col)) {
+                    byKey.set(key, {
+                        row,
+                        col,
+                        avg: { r: 255, g: 255, b: 255 },
+                        paletteIndex,
+                    });
+                }
+            }
+
+            return [...byKey.values()];
+        }
+
+        return mergeSchemeCells(baseCells, overrides, schemeSizeBeads, gridLayout);
     }, [baseCells, cellOverrides, cellsBaseKey, schemeSizeBeads, gridLayout]);
 
     const paletteBaseKey = useMemo(
@@ -348,23 +389,22 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
 
             setSchemeSizeBeadsState(next);
 
-            setCellOverrides((current) => {
-                const cells =
-                    current.baseKey === cellsBaseKey ? current.cells : {};
-                const filtered = filterOverridesToScheme(cells, next);
+            // Для ажурної — не фільтруємо override-и (координати нативні, не прив'язані до схеми).
+            if (gridLayout !== "lace") {
+                setCellOverrides((current) => {
+                    const cells =
+                        current.baseKey === cellsBaseKey ? current.cells : {};
+                    const filtered = filterOverridesToScheme(cells, next);
+                    const nextOverrides = { baseKey: cellsBaseKey, cells: filtered };
+                    cellOverridesRef.current = nextOverrides;
+                    return nextOverrides;
+                });
 
-                const nextOverrides = {
-                    baseKey: cellsBaseKey,
-                    cells: filtered,
-                };
-                cellOverridesRef.current = nextOverrides;
-                return nextOverrides;
-            });
-
-            pendingStrokeRef.current.clear();
-            setEditHistory({ baseKey: cellsBaseKey, undo: [], redo: [] });
+                pendingStrokeRef.current.clear();
+                setEditHistory({ baseKey: cellsBaseKey, undo: [], redo: [] });
+            }
         },
-        [cellsBaseKey, imageGridSizeBeads.width, imageGridSizeBeads.height],
+        [cellsBaseKey, gridLayout, imageGridSizeBeads.width, imageGridSizeBeads.height],
     );
 
     const setCellPaletteIndex = useCallback(

@@ -96,8 +96,7 @@ export function floodFillRegion(
         return [];
     }
 
-    // Для «Ажурної» сітки не передаємо schemeSize, щоб не обрізати від'ємні координати.
-    const bounds = layout === "lace" ? undefined : schemeSize;
+    const bounds = schemeSize;
 
     const visited = new Set<string>();
     const queue: GridCoord[] = [{ row: startRow, col: startCol }];
