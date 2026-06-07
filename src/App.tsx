@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { ExportDialog } from "./components/export/ExportDialog";
 import { SettingsPanel } from "./components/controls/SettingsPanel";
@@ -12,11 +12,67 @@ import {
 } from "./features/export/exportPatternImage";
 import { useImageUpload } from "./features/image/useImageUpload";
 import { usePatternModel } from "./features/pattern/usePatternModel";
+import {
+    buildProjectFile,
+    downloadProjectFile,
+    encodeImageToBase64,
+    projectImageToDataUrl,
+    readProjectFile,
+    type BeadSchemeProject,
+} from "./features/project/projectFile";
 
 export default function App() {
     const imageUpload = useImageUpload();
     const patternModel = usePatternModel(imageUpload.bitmap);
     const [exportDialogOpen, setExportDialogOpen] = useState(false);
+    const projectInputRef = useRef<HTMLInputElement>(null);
+    const pendingProjectRef = useRef<BeadSchemeProject | null>(null);
+
+    useEffect(() => {
+        const pending = pendingProjectRef.current;
+        if (!pending || !imageUpload.bitmap) return;
+
+        pendingProjectRef.current = null;
+        patternModel.loadProject(pending);
+    }, [imageUpload.bitmap, patternModel]);
+
+    const handleSaveProject = useCallback(async () => {
+        if (!imageUpload.bitmap) return;
+
+        try {
+            const data = patternModel.exportProjectData();
+            if (!data) return;
+
+            const image = await encodeImageToBase64(imageUpload.bitmap);
+            downloadProjectFile(buildProjectFile(image, data));
+        } catch (error) {
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : "Не вдалося записати проєкт.";
+            window.alert(message);
+        }
+    }, [imageUpload.bitmap, patternModel]);
+
+    const handleLoadProject = useCallback(
+        async (file: File | null) => {
+            if (!file) return;
+
+            try {
+                const project = await readProjectFile(file);
+                pendingProjectRef.current = project;
+                imageUpload.loadFromDataUrl(projectImageToDataUrl(project.image));
+            } catch (error) {
+                pendingProjectRef.current = null;
+                const message =
+                    error instanceof Error
+                        ? error.message
+                        : "Не вдалося завантажити проєкт.";
+                window.alert(message);
+            }
+        },
+        [imageUpload],
+    );
 
     const handleExportConfirm = useCallback(
         (labelPaletteIndices: boolean) => {
@@ -47,11 +103,13 @@ export default function App() {
                 <div className="top-row">
                     <SettingsPanel
                         fileInputRef={imageUpload.fileInputRef}
+                        projectInputRef={projectInputRef}
                         isUploadDragOver={imageUpload.isUploadDragOver}
                         onUploadDragOver={imageUpload.onUploadDragOver}
                         onUploadDragLeave={imageUpload.onUploadDragLeave}
                         onUploadDrop={imageUpload.onDropFile}
                         onFileSelect={imageUpload.onFile}
+                        onProjectSelect={handleLoadProject}
                         paletteSize={patternModel.paletteSize}
                         onPaletteSizeChange={patternModel.setPaletteSize}
                         beadsPerRow={patternModel.beadsPerRow}
@@ -76,7 +134,9 @@ export default function App() {
                         canExport={
                             patternModel.hasPattern && !!imageUpload.bitmap
                         }
+                        canSaveProject={!!imageUpload.bitmap}
                         onExport={() => setExportDialogOpen(true)}
+                        onSaveProject={handleSaveProject}
                     />
 
                     <OriginalImagePreview

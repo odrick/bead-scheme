@@ -32,6 +32,7 @@ import {
     mergeSchemeCells,
     type SchemeSizeBeads,
 } from "./schemeGrid";
+import type { ProjectExportData } from "../project/projectFile";
 
 const DEFAULT_BG = "#ffffff";
 const BG_MATCH_SQ = 55 * 55;
@@ -98,6 +99,8 @@ type PatternModel = {
     schemeSizeBeads: SchemeSizeBeads;
     imageGridSizeBeads: SchemeSizeBeads;
     setSchemeSizeBeads: (width: number, height: number) => void;
+    exportProjectData: () => ProjectExportData | null;
+    loadProject: (project: ProjectExportData) => void;
 };
 
 export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
@@ -134,6 +137,11 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         height: 0,
     });
     const autoSchemeSizeKeyRef = useRef("");
+    const pendingProjectRestoreRef = useRef<{
+        paletteColors: Record<string, RGB>;
+        cellEdits: Record<string, number>;
+        editHistory: { undo: CellEditChange[][]; redo: CellEditChange[][] };
+    } | null>(null);
 
     const baseCellsRef = useRef<BrickCell[]>([]);
     const cellOverridesRef = useRef(cellOverrides);
@@ -270,6 +278,8 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
     );
 
     useEffect(() => {
+        if (pendingProjectRestoreRef.current) return;
+
         pendingStrokeRef.current.clear();
         setEditHistory((current) =>
             current.baseKey === cellsBaseKey
@@ -324,6 +334,32 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
 
         return palette.map((color, index) => paletteOverrides.colors[index] ?? color);
     }, [palette, paletteBaseKey, paletteOverrides]);
+
+    useEffect(() => {
+        const pending = pendingProjectRestoreRef.current;
+        if (!pending || !bitmap) return;
+
+        pendingProjectRestoreRef.current = null;
+        pendingStrokeRef.current.clear();
+
+        setPaletteOverrides({
+            baseKey: paletteBaseKey,
+            colors: pending.paletteColors,
+        });
+
+        const nextCellOverrides = {
+            baseKey: cellsBaseKey,
+            cells: pending.cellEdits,
+        };
+        setCellOverrides(nextCellOverrides);
+        cellOverridesRef.current = nextCellOverrides;
+
+        setEditHistory({
+            baseKey: cellsBaseKey,
+            undo: pending.editHistory.undo,
+            redo: pending.editHistory.redo,
+        });
+    }, [bitmap, paletteBaseKey, cellsBaseKey]);
 
     const setPaletteColor = useCallback(
         (index: number, hex: string) => {
@@ -618,6 +654,85 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         [cells, palette.length],
     );
 
+    const exportProjectData = useCallback((): ProjectExportData | null => {
+        if (!bitmap) return null;
+
+        return {
+            version: 1,
+            settings: {
+                paletteSize,
+                beadsPerRow,
+                gridLayout,
+                backgroundMode,
+                backgroundHex,
+                previewZoom,
+                canvasBackground,
+                schemeSize: schemeSizeBeads,
+            },
+            paletteColors:
+                paletteOverrides.baseKey === paletteBaseKey
+                    ? paletteOverrides.colors
+                    : {},
+            cellEdits:
+                cellOverrides.baseKey === cellsBaseKey
+                    ? cellOverrides.cells
+                    : {},
+            editHistory:
+                editHistory.baseKey === cellsBaseKey
+                    ? { undo: editHistory.undo, redo: editHistory.redo }
+                    : { undo: [], redo: [] },
+        };
+    }, [
+        bitmap,
+        paletteSize,
+        beadsPerRow,
+        gridLayout,
+        backgroundMode,
+        backgroundHex,
+        previewZoom,
+        canvasBackground,
+        schemeSizeBeads,
+        paletteOverrides,
+        paletteBaseKey,
+        cellOverrides,
+        cellsBaseKey,
+        editHistory,
+    ]);
+
+    const loadProject = useCallback(
+        (project: ProjectExportData) => {
+            const { settings, paletteColors, cellEdits, editHistory: history } =
+                project;
+
+            pendingProjectRestoreRef.current = {
+                paletteColors,
+                cellEdits,
+                editHistory: history,
+            };
+            pendingStrokeRef.current.clear();
+
+            setPaletteSize(settings.paletteSize);
+            setBeadsPerRow(settings.beadsPerRow);
+            setGridLayout(settings.gridLayout);
+            setBackgroundMode(settings.backgroundMode);
+            setBackgroundHex(settings.backgroundHex);
+            setPreviewZoom(settings.previewZoom);
+            setCanvasBackground(settings.canvasBackground);
+            setSchemeSizeBeadsState(settings.schemeSize);
+
+            autoSchemeSizeKeyRef.current = [
+                bitmap?.width ?? 0,
+                bitmap?.height ?? 0,
+                settings.paletteSize,
+                settings.beadsPerRow,
+                settings.backgroundMode,
+                settings.backgroundHex,
+                settings.gridLayout,
+            ].join(":");
+        },
+        [bitmap, setPreviewZoom],
+    );
+
     return {
         paletteSize,
         setPaletteSize,
@@ -654,5 +769,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         schemeSizeBeads,
         imageGridSizeBeads,
         setSchemeSizeBeads,
+        exportProjectData,
+        loadProject,
     };
 }

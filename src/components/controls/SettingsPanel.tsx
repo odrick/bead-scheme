@@ -2,6 +2,7 @@ import type { DragEventHandler, RefObject } from "react";
 import { BackgroundColorField } from "./BackgroundColorField";
 import type { BackgroundMode, GridLayout } from "../../beadMath";
 import type { CanvasBackground } from "../../features/preview/canvasUtils";
+import { PROJECT_FILE_EXTENSION } from "../../features/project/projectFile";
 import {
     PREVIEW_ZOOM_MAX,
     PREVIEW_ZOOM_MIN,
@@ -10,11 +11,13 @@ import {
 
 type SettingsPanelProps = {
     fileInputRef: RefObject<HTMLInputElement | null>;
+    projectInputRef: RefObject<HTMLInputElement | null>;
     isUploadDragOver: boolean;
     onUploadDragOver: DragEventHandler<HTMLElement>;
     onUploadDragLeave: DragEventHandler<HTMLElement>;
     onUploadDrop: DragEventHandler<HTMLElement>;
     onFileSelect: (file: File | null) => void;
+    onProjectSelect: (file: File | null) => void;
     paletteSize: number;
     onPaletteSizeChange: (value: number) => void;
     beadsPerRow: number;
@@ -33,16 +36,20 @@ type SettingsPanelProps = {
     beadCount: number;
     totalCells: number;
     canExport: boolean;
+    canSaveProject: boolean;
     onExport: () => void;
+    onSaveProject: () => void;
 };
 
 export function SettingsPanel({
     fileInputRef,
+    projectInputRef,
     isUploadDragOver,
     onUploadDragOver,
     onUploadDragLeave,
     onUploadDrop,
     onFileSelect,
+    onProjectSelect,
     paletteSize,
     onPaletteSizeChange,
     beadsPerRow,
@@ -61,7 +68,9 @@ export function SettingsPanel({
     beadCount,
     totalCells,
     canExport,
+    canSaveProject,
     onExport,
+    onSaveProject,
 }: SettingsPanelProps) {
     return (
         <aside className="panel">
@@ -267,6 +276,34 @@ export function SettingsPanel({
             >
                 Скинути
             </button>
+
+            <div className="project-actions">
+                <button
+                    type="button"
+                    className="project-button"
+                    disabled={!canSaveProject}
+                    onClick={onSaveProject}
+                >
+                    Зберегти
+                </button>
+                <input
+                    ref={projectInputRef}
+                    className="upload-input-hidden"
+                    type="file"
+                    accept={`.${PROJECT_FILE_EXTENSION},application/json`}
+                    onChange={(event) => {
+                        onProjectSelect(event.target.files?.[0] ?? null);
+                        event.target.value = "";
+                    }}
+                />
+                <button
+                    type="button"
+                    className="project-button"
+                    onClick={() => projectInputRef.current?.click()}
+                >
+                    Завантажити
+                </button>
+            </div>
 
             <button
                 type="button"

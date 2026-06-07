@@ -28,6 +28,16 @@ export function useImageUpload() {
         });
     }, []);
 
+    const loadFromDataUrl = useCallback((dataUrl: string) => {
+        setFileUrl((prev) => {
+            if (prev?.startsWith("blob:")) {
+                URL.revokeObjectURL(prev);
+            }
+
+            return dataUrl;
+        });
+    }, []);
+
     const onDropFile = useCallback(
         (event: DropEvent) => {
             event.preventDefault();
@@ -101,6 +111,7 @@ export function useImageUpload() {
         isUploadDragOver,
         isOriginalDragOver,
         onFile,
+        loadFromDataUrl,
         onDropFile,
         onUploadDragOver,
         onUploadDragLeave,

@@ -270,7 +270,8 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .recalculate-button,
-.export-button {
+.export-button,
+.project-button {
     width: 100%;
     margin-top: 0.65rem;
     color: rgba(226, 232, 240, 0.95);
@@ -306,6 +307,31 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .export-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.project-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    margin-top: 0.65rem;
+}
+
+.project-button {
+    margin-top: 0;
+    border: 1px solid rgba(167, 139, 250, 0.45);
+    background: rgba(167, 139, 250, 0.12);
+    cursor: pointer;
+    font: inherit;
+}
+
+.project-button:hover:not(:disabled) {
+    border-color: rgba(167, 139, 250, 0.75);
+    background: rgba(167, 139, 250, 0.2);
+}
+
+.project-button:disabled {
     opacity: 0.45;
     cursor: not-allowed;
 }
