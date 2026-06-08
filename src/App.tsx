@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { ExportDialog } from "./components/export/ExportDialog";
 import { SettingsPanel } from "./components/controls/SettingsPanel";
@@ -20,6 +20,7 @@ import {
     readProjectFile,
     type BeadSchemeProject,
 } from "./features/project/projectFile";
+import { useProjectAutosave } from "./features/project/useProjectAutosave";
 
 export default function App() {
     const imageUpload = useImageUpload();
@@ -29,6 +30,26 @@ export default function App() {
     const projectInputRef = useRef<HTMLInputElement>(null);
     const pendingProjectRef = useRef<BeadSchemeProject | null>(null);
     const skipBitmapAutoFitRef = useRef(false);
+
+    const projectDataForAutosave = useMemo(
+        () => patternModel.exportProjectData(),
+        [patternModel.exportProjectData],
+    );
+
+    const loadProjectIntoApp = useCallback(
+        (project: BeadSchemeProject) => {
+            pendingProjectRef.current = project;
+            skipBitmapAutoFitRef.current = true;
+            imageUpload.loadFromDataUrl(projectImageToDataUrl(project.image));
+        },
+        [imageUpload],
+    );
+
+    useProjectAutosave({
+        bitmap: imageUpload.bitmap,
+        projectData: projectDataForAutosave,
+        onRestore: loadProjectIntoApp,
+    });
 
     useEffect(() => {
         const pending = pendingProjectRef.current;
@@ -74,9 +95,7 @@ export default function App() {
 
             try {
                 const project = await readProjectFile(file);
-                pendingProjectRef.current = project;
-                skipBitmapAutoFitRef.current = true;
-                imageUpload.loadFromDataUrl(projectImageToDataUrl(project.image));
+                loadProjectIntoApp(project);
             } catch (error) {
                 pendingProjectRef.current = null;
                 const message =
@@ -86,7 +105,7 @@ export default function App() {
                 window.alert(message);
             }
         },
-        [imageUpload],
+        [loadProjectIntoApp],
     );
 
     const handleExportConfirm = useCallback(
