@@ -17,7 +17,7 @@ export type ImageMaskSettings = {
 
 export const MASK_KIND_LABELS: Record<MaskKind, string> = {
     none: "немає",
-    circle: "круг",
+    circle: "коло",
     tie: "галстук",
     gerdana: "гердана",
     custom: "своя",

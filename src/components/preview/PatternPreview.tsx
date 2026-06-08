@@ -543,43 +543,38 @@ function PatternColorCombobox({
                               </li>
                           ))
                         : (
-                              <>
-                                  <li role="presentation">
-                                      <button
-                                          type="button"
-                                          role="option"
-                                          aria-selected={
-                                              selection.kind === "restore"
-                                          }
-                                          aria-label="Відновлення кольору"
-                                          title="Відновлення кольору"
-                                          className={`pattern-color-option pattern-color-option--restore${selection.kind === "restore" ? " active" : ""}`}
-                                          onClick={() =>
-                                              pick({ kind: "restore" })
-                                          }
-                                      >
-                                          <RestoreColorIcon />
-                                      </button>
-                                  </li>
-                                  <li role="presentation">
-                                      <button
-                                          type="button"
-                                          role="option"
-                                          aria-selected={
-                                              selection.kind === "mark"
-                                          }
-                                          aria-label="Відмітка"
-                                          title="Відмітка"
-                                          className={`pattern-color-option pattern-color-option--mark${selection.kind === "mark" ? " active" : ""}`}
-                                          onClick={() =>
-                                              pick({ kind: "mark" })
-                                          }
-                                      >
-                                          <MarkStarIcon />
-                                      </button>
-                                  </li>
-                              </>
+                              <li role="presentation">
+                                  <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={selection.kind === "mark"}
+                                      aria-label="Відмітка"
+                                      title="Відмітка"
+                                      className={`pattern-color-option pattern-color-option--mark${selection.kind === "mark" ? " active" : ""}`}
+                                      onClick={() => pick({ kind: "mark" })}
+                                  >
+                                      <MarkStarIcon />
+                                  </button>
+                              </li>
                           )}
+                    <li
+                        className="pattern-color-menu-divider"
+                        role="presentation"
+                        aria-hidden
+                    />
+                    <li role="presentation">
+                        <button
+                            type="button"
+                            role="option"
+                            aria-selected={selection.kind === "restore"}
+                            aria-label="Відновлення кольору"
+                            title="Відновлення кольору"
+                            className={`pattern-color-option pattern-color-option--restore${selection.kind === "restore" ? " active" : ""}`}
+                            onClick={() => pick({ kind: "restore" })}
+                        >
+                            <RestoreColorIcon />
+                        </button>
+                    </li>
                 </ul>
             )}
         </div>
@@ -845,7 +840,12 @@ export function PatternPreview({
     useEffect(() => {
         setPaintSelection((selection) => {
             if (schemeMode === "editing") {
-                if (selection.kind === "palette") return selection;
+                if (
+                    selection.kind === "palette" ||
+                    selection.kind === "restore"
+                ) {
+                    return selection;
+                }
 
                 return { kind: "palette", index: 0 };
             }
@@ -1108,7 +1108,9 @@ export function PatternPreview({
             }
 
             if (editTool === "pencil") {
-                if (paintSelection.kind === "palette") {
+                if (paintSelection.kind === "restore") {
+                    onRestoreCell(cell.row, cell.col, { stroke: true });
+                } else if (paintSelection.kind === "palette") {
                     onCellPaletteIndexChange(
                         cell.row,
                         cell.col,
