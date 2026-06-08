@@ -15,6 +15,7 @@ import {
     PREVIEW_ZOOM_MIN,
     PREVIEW_ZOOM_STEP,
 } from "../../features/preview/previewZoom";
+import { useDeferredPreviewZoom } from "../../features/preview/useDeferredPreviewZoom";
 import {
     floodFillChanges,
     floodFillMarkChanges,
@@ -790,6 +791,12 @@ export function PatternPreview({
 
     const lastAutoFitKeyRef = useRef(0);
 
+    const {
+        requestPreviewZoom,
+        commitPreviewZoom,
+        applyPreviewZoomNow,
+    } = useDeferredPreviewZoom(previewZoom, onPreviewZoomChange);
+
     const fitPreviewToWindow = useCallback(() => {
         if (!bitmap || cells.length === 0) return;
         if (schemeSizeBeads.width <= 0 || schemeSizeBeads.height <= 0) return;
@@ -800,7 +807,7 @@ export function PatternPreview({
         const { clientWidth, clientHeight } = wrap;
         if (clientWidth <= 0 || clientHeight <= 0) return;
 
-        onPreviewZoomChange(
+        applyPreviewZoomNow(
             computeFitPreviewZoom(
                 cells,
                 cellSizePx,
@@ -819,7 +826,7 @@ export function PatternPreview({
         cellSizePx,
         gridLayout,
         schemeSizeBeads,
-        onPreviewZoomChange,
+        applyPreviewZoomNow,
     ]);
 
     useEffect(() => {
@@ -875,14 +882,14 @@ export function PatternPreview({
             event.preventDefault();
             const direction = event.deltaY < 0 ? 1 : -1;
 
-            onPreviewZoomChange(
+            requestPreviewZoom(
                 (zoom) => zoom + direction * PREVIEW_ZOOM_STEP,
             );
         };
 
         wrap.addEventListener("wheel", onWheel, { passive: false });
         return () => wrap.removeEventListener("wheel", onWheel);
-    }, [bitmap, onPreviewZoomChange]);
+    }, [bitmap, requestPreviewZoom]);
 
     const paintSnapshotRef = useRef<{
         layoutKey: string;
@@ -1441,7 +1448,11 @@ export function PatternPreview({
                             max={PREVIEW_ZOOM_MAX}
                             step={PREVIEW_ZOOM_STEP}
                             value={previewZoom}
-                            onCommit={(value) => onPreviewZoomChange(value)}
+                            onDraftChange={requestPreviewZoom}
+                            onCommit={(value) => {
+                                requestPreviewZoom(value);
+                                commitPreviewZoom();
+                            }}
                             aria-label="Масштаб перегляду схеми"
                             tooltip="Масштаб перегляду схеми"
                         />

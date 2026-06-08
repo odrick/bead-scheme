@@ -24,8 +24,10 @@ import {
 } from "./features/project/projectFile";
 import { useMaskImages } from "./features/mask/useMaskImages";
 import { useProjectAutosave } from "./features/project/useProjectAutosave";
+import { useBlockPageCtrlWheelZoom } from "./features/preview/useBlockPageCtrlWheelZoom";
 
 export default function App() {
+    useBlockPageCtrlWheelZoom();
     const imageUpload = useImageUpload();
     const maskImages = useMaskImages();
     const patternModel = usePatternModel(imageUpload.bitmap, { maskImages });
