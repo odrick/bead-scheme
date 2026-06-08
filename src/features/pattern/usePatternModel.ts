@@ -17,16 +17,20 @@ import {
 import { clampPreviewZoom } from "../preview/previewZoom";
 import {
     applyCellEditChanges,
+    applyMarkChanges,
     cellKey,
     EMPTY_PALETTE_INDEX,
     exportCellEditsFromState,
     getBasePaletteIndex,
     getEffectivePaletteIndex,
+    isMarkedKey,
     isSchemeBeadIndex,
-    MARKED_PALETTE_INDEX,
     MAX_CELL_EDIT_HISTORY,
+    setMarkValue,
     setOverrideValue,
+    splitLegacyCellEdits,
     type CellEditChange,
+    type MarkEditChange,
 } from "./cellEditHistory";
 import {
     clampSchemeSize,
@@ -74,10 +78,21 @@ type CellOverrides = {
     cells: Record<string, number>;
 };
 
+type MarkOverrides = {
+    baseKey: string;
+    marks: Record<string, boolean>;
+};
+
 type EditHistoryState = {
     baseKey: string;
     undo: CellEditChange[][];
     redo: CellEditChange[][];
+};
+
+type MarkEditHistoryState = {
+    baseKey: string;
+    undo: MarkEditChange[][];
+    redo: MarkEditChange[][];
 };
 
 type SetCellPaletteIndexOptions = {
@@ -132,6 +147,24 @@ type PatternModel = {
         col: number,
         options?: SetCellPaletteIndexOptions,
     ) => void;
+    cellMarks: Record<string, boolean>;
+    setCellMarked: (
+        row: number,
+        col: number,
+        marked: boolean,
+        options?: SetCellPaletteIndexOptions,
+    ) => void;
+    clearCellMark: (
+        row: number,
+        col: number,
+        options?: SetCellPaletteIndexOptions,
+    ) => void;
+    endMarkEditStroke: () => void;
+    applyMarkEditBatch: (changes: MarkEditChange[]) => void;
+    undoMarkEdit: () => void;
+    redoMarkEdit: () => void;
+    canUndoMarkEdit: boolean;
+    canRedoMarkEdit: boolean;
     baseCells: BrickCell[];
     exportProjectData: () => ProjectExportData | null;
     loadProject: (project: ProjectExportData) => void;
@@ -178,7 +211,16 @@ export function usePatternModel(
         baseKey: "",
         cells: {},
     });
+    const [markOverrides, setMarkOverrides] = useState<MarkOverrides>({
+        baseKey: "",
+        marks: {},
+    });
     const [editHistory, setEditHistory] = useState<EditHistoryState>({
+        baseKey: "",
+        undo: [],
+        redo: [],
+    });
+    const [markEditHistory, setMarkEditHistory] = useState<MarkEditHistoryState>({
         baseKey: "",
         undo: [],
         redo: [],
@@ -191,7 +233,9 @@ export function usePatternModel(
     const pendingProjectRestoreRef = useRef<{
         paletteColors: Record<string, RGB>;
         cellEdits: Record<string, number>;
+        cellMarks: Record<string, boolean>;
         editHistory: { undo: CellEditChange[][]; redo: CellEditChange[][] };
+        markEditHistory: { undo: MarkEditChange[][]; redo: MarkEditChange[][] };
     } | null>(null);
     const [restoreKey, setRestoreKey] = useState(0);
     const [maskSettings, setMaskSettings] = useState<ImageMaskSettings>(
@@ -209,9 +253,12 @@ export function usePatternModel(
 
     const baseCellsRef = useRef<BrickCell[]>([]);
     const cellOverridesRef = useRef(cellOverrides);
+    const markOverridesRef = useRef(markOverrides);
     const pendingStrokeRef = useRef<Map<string, CellEditChange>>(new Map());
+    const pendingMarkStrokeRef = useRef<Map<string, MarkEditChange>>(new Map());
 
     cellOverridesRef.current = cellOverrides;
+    markOverridesRef.current = markOverrides;
 
     const backgroundRgb = useMemo(
         () => parseHexColor(backgroundHex),
@@ -450,16 +497,31 @@ export function usePatternModel(
         if (pendingProjectRestoreRef.current) return;
 
         pendingStrokeRef.current.clear();
+        pendingMarkStrokeRef.current.clear();
         setEditHistory((current) =>
+            current.baseKey === cellsBaseKey
+                ? current
+                : { baseKey: cellsBaseKey, undo: [], redo: [] },
+        );
+        setMarkEditHistory((current) =>
             current.baseKey === cellsBaseKey
                 ? current
                 : { baseKey: cellsBaseKey, undo: [], redo: [] },
         );
     }, [cellsBaseKey]);
 
+    const cellMarks = useMemo(() => {
+        return markOverrides.baseKey === cellsBaseKey ? markOverrides.marks : {};
+    }, [markOverrides, cellsBaseKey]);
+
     const cells = useMemo(() => {
-        const overrides =
+        const rawOverrides =
             cellOverrides.baseKey === cellsBaseKey ? cellOverrides.cells : {};
+        const overrides = Object.fromEntries(
+            Object.entries(rawOverrides).filter(
+                ([, paletteIndex]) => paletteIndex >= 0 || paletteIndex === EMPTY_PALETTE_INDEX,
+            ),
+        );
 
         if (gridLayout === "lace") {
             // Нативні lace-координати — обмеження по schemeSize не застосовуємо.
@@ -523,10 +585,22 @@ export function usePatternModel(
         setCellOverrides(nextCellOverrides);
         cellOverridesRef.current = nextCellOverrides;
 
+        const nextMarkOverrides = {
+            baseKey: cellsBaseKey,
+            marks: pending.cellMarks,
+        };
+        setMarkOverrides(nextMarkOverrides);
+        markOverridesRef.current = nextMarkOverrides;
+
         setEditHistory({
             baseKey: cellsBaseKey,
             undo: pending.editHistory.undo,
             redo: pending.editHistory.redo,
+        });
+        setMarkEditHistory({
+            baseKey: cellsBaseKey,
+            undo: pending.markEditHistory.undo,
+            redo: pending.markEditHistory.redo,
         });
     }, [bitmap, paletteBaseKey, cellsBaseKey, restoreKey]);
 
@@ -577,7 +651,12 @@ export function usePatternModel(
         setCellOverrides(emptyCellOverrides);
         cellOverridesRef.current = emptyCellOverrides;
 
+        const emptyMarkOverrides = { baseKey: cellsBaseKey, marks: {} };
+        setMarkOverrides(emptyMarkOverrides);
+        markOverridesRef.current = emptyMarkOverrides;
+
         setEditHistory({ baseKey: cellsBaseKey, undo: [], redo: [] });
+        setMarkEditHistory({ baseKey: cellsBaseKey, undo: [], redo: [] });
 
         setSchemeSizeBeadsState({
             width: imageGridSizeBeads.width,
@@ -606,7 +685,36 @@ export function usePatternModel(
                 });
 
                 pendingStrokeRef.current.clear();
+                pendingMarkStrokeRef.current.clear();
                 setEditHistory({ baseKey: cellsBaseKey, undo: [], redo: [] });
+                setMarkEditHistory({ baseKey: cellsBaseKey, undo: [], redo: [] });
+
+                setMarkOverrides((current) => {
+                    const marks =
+                        current.baseKey === cellsBaseKey ? current.marks : {};
+                    const filtered = Object.fromEntries(
+                        Object.entries(marks).filter(([key]) => {
+                            const [rowStr, colStr] = key.split(",");
+                            const row = Number.parseInt(rowStr, 10);
+                            const col = Number.parseInt(colStr, 10);
+
+                            return (
+                                !Number.isNaN(row) &&
+                                !Number.isNaN(col) &&
+                                row >= 0 &&
+                                row < next.height &&
+                                col >= 0 &&
+                                col < next.width
+                            );
+                        }),
+                    );
+                    const nextOverrides = {
+                        baseKey: cellsBaseKey,
+                        marks: filtered,
+                    };
+                    markOverridesRef.current = nextOverrides;
+                    return nextOverrides;
+                });
             }
         },
         [cellsBaseKey, gridLayout, imageGridSizeBeads.width, imageGridSizeBeads.height],
@@ -632,13 +740,6 @@ export function usePatternModel(
             );
 
             if (currentEffective === paletteIndex) return;
-
-            if (
-                paletteIndex === MARKED_PALETTE_INDEX &&
-                currentEffective === EMPTY_PALETTE_INDEX
-            ) {
-                return;
-            }
 
             if (options?.stroke) {
                 const pending = pendingStrokeRef.current;
@@ -826,10 +927,205 @@ export function usePatternModel(
         });
     }, [cellsBaseKey]);
 
+    const setCellMarked = useCallback(
+        (
+            row: number,
+            col: number,
+            marked: boolean,
+            options?: SetCellPaletteIndexOptions,
+        ) => {
+            const key = cellKey(row, col);
+            const colorIndex = getEffectivePaletteIndex(
+                baseCellsRef.current,
+                cellOverridesRef.current.baseKey === cellsBaseKey
+                    ? cellOverridesRef.current.cells
+                    : {},
+                row,
+                col,
+            );
+
+            if (marked && colorIndex === EMPTY_PALETTE_INDEX) return;
+
+            const currentMarks =
+                markOverridesRef.current.baseKey === cellsBaseKey
+                    ? markOverridesRef.current.marks
+                    : {};
+            const currentlyMarked = isMarkedKey(currentMarks, key);
+
+            if (currentlyMarked === marked) return;
+
+            if (options?.stroke) {
+                const pending = pendingMarkStrokeRef.current;
+                const existing = pending.get(key);
+
+                if (existing) {
+                    existing.to = marked;
+                } else {
+                    pending.set(key, {
+                        row,
+                        col,
+                        from: currentlyMarked,
+                        to: marked,
+                    });
+                }
+            }
+
+            setMarkOverrides((current) => {
+                const marks =
+                    current.baseKey === cellsBaseKey ? current.marks : {};
+                const nextMarks = setMarkValue(marks, key, marked);
+                const next = { baseKey: cellsBaseKey, marks: nextMarks };
+                markOverridesRef.current = next;
+                return next;
+            });
+        },
+        [cellsBaseKey],
+    );
+
+    const clearCellMark = useCallback(
+        (
+            row: number,
+            col: number,
+            options?: SetCellPaletteIndexOptions,
+        ) => {
+            setCellMarked(row, col, false, options);
+        },
+        [setCellMarked],
+    );
+
+    const endMarkEditStroke = useCallback(() => {
+        const changes = [...pendingMarkStrokeRef.current.values()];
+        pendingMarkStrokeRef.current.clear();
+
+        if (changes.length === 0) return;
+
+        setMarkEditHistory((current) => {
+            const undo =
+                current.baseKey === cellsBaseKey
+                    ? [...current.undo, changes]
+                    : [changes];
+
+            while (undo.length > MAX_CELL_EDIT_HISTORY) {
+                undo.shift();
+            }
+
+            return {
+                baseKey: cellsBaseKey,
+                undo,
+                redo: [],
+            };
+        });
+    }, [cellsBaseKey]);
+
+    const applyMarkEditBatch = useCallback(
+        (changes: MarkEditChange[]) => {
+            if (changes.length === 0) return;
+
+            setMarkOverrides((current) => {
+                let marks =
+                    current.baseKey === cellsBaseKey ? { ...current.marks } : {};
+
+                for (const { row, col, to } of changes) {
+                    const key = cellKey(row, col);
+                    const colorIndex = getEffectivePaletteIndex(
+                        baseCellsRef.current,
+                        cellOverridesRef.current.baseKey === cellsBaseKey
+                            ? cellOverridesRef.current.cells
+                            : {},
+                        row,
+                        col,
+                    );
+
+                    if (to && colorIndex === EMPTY_PALETTE_INDEX) continue;
+
+                    marks = setMarkValue(marks, key, to);
+                }
+
+                const next = { baseKey: cellsBaseKey, marks };
+                markOverridesRef.current = next;
+                return next;
+            });
+
+            setMarkEditHistory((current) => {
+                const undo =
+                    current.baseKey === cellsBaseKey
+                        ? [...current.undo, changes]
+                        : [changes];
+
+                while (undo.length > MAX_CELL_EDIT_HISTORY) {
+                    undo.shift();
+                }
+
+                return {
+                    baseKey: cellsBaseKey,
+                    undo,
+                    redo: [],
+                };
+            });
+        },
+        [cellsBaseKey],
+    );
+
+    const undoMarkEdit = useCallback(() => {
+        setMarkEditHistory((current) => {
+            if (current.baseKey !== cellsBaseKey || current.undo.length === 0) {
+                return current;
+            }
+
+            const changes = current.undo[current.undo.length - 1];
+
+            setMarkOverrides((overrides) => {
+                const marks =
+                    overrides.baseKey === cellsBaseKey ? overrides.marks : {};
+                const nextMarks = applyMarkChanges(marks, changes, true);
+                const next = { baseKey: cellsBaseKey, marks: nextMarks };
+                markOverridesRef.current = next;
+                return next;
+            });
+
+            return {
+                baseKey: cellsBaseKey,
+                undo: current.undo.slice(0, -1),
+                redo: [...current.redo, changes],
+            };
+        });
+    }, [cellsBaseKey]);
+
+    const redoMarkEdit = useCallback(() => {
+        setMarkEditHistory((current) => {
+            if (current.baseKey !== cellsBaseKey || current.redo.length === 0) {
+                return current;
+            }
+
+            const changes = current.redo[current.redo.length - 1];
+
+            setMarkOverrides((overrides) => {
+                const marks =
+                    overrides.baseKey === cellsBaseKey ? overrides.marks : {};
+                const nextMarks = applyMarkChanges(marks, changes, false);
+                const next = { baseKey: cellsBaseKey, marks: nextMarks };
+                markOverridesRef.current = next;
+                return next;
+            });
+
+            return {
+                baseKey: cellsBaseKey,
+                undo: [...current.undo, changes],
+                redo: current.redo.slice(0, -1),
+            };
+        });
+    }, [cellsBaseKey]);
+
     const canUndoCellEdit =
         editHistory.baseKey === cellsBaseKey && editHistory.undo.length > 0;
     const canRedoCellEdit =
         editHistory.baseKey === cellsBaseKey && editHistory.redo.length > 0;
+    const canUndoMarkEdit =
+        markEditHistory.baseKey === cellsBaseKey &&
+        markEditHistory.undo.length > 0;
+    const canRedoMarkEdit =
+        markEditHistory.baseKey === cellsBaseKey &&
+        markEditHistory.redo.length > 0;
 
     const hasPattern = useMemo(
         () => cells.some((cell) => isSchemeBeadIndex(cell.paletteIndex)),
@@ -870,9 +1166,17 @@ export function usePatternModel(
                     ? paletteOverrides.colors
                     : {},
             cellEdits: exportCellEditsFromState(baseCells, cells),
+            cellMarks: Object.keys(cellMarks),
             editHistory:
                 editHistory.baseKey === cellsBaseKey
                     ? { undo: editHistory.undo, redo: editHistory.redo }
+                    : { undo: [], redo: [] },
+            markEditHistory:
+                markEditHistory.baseKey === cellsBaseKey
+                    ? {
+                          undo: markEditHistory.undo,
+                          redo: markEditHistory.redo,
+                      }
                     : { undo: [], redo: [] },
         };
     }, [
@@ -890,8 +1194,10 @@ export function usePatternModel(
         paletteBaseKey,
         baseCells,
         cells,
+        cellMarks,
         cellsBaseKey,
         editHistory,
+        markEditHistory,
         maskSettings,
         sourceTransform,
     ]);
@@ -955,13 +1261,28 @@ export function usePatternModel(
 
     const loadProject = useCallback(
         (project: ProjectExportData) => {
-            const { settings, paletteColors, cellEdits, editHistory: history } =
-                project;
+            const {
+                settings,
+                paletteColors,
+                cellEdits,
+                cellMarks,
+                editHistory: history,
+                markEditHistory: markHistory,
+            } = project;
+
+            const legacySplit = splitLegacyCellEdits(cellEdits);
+            const restoredMarks = { ...legacySplit.marks };
+
+            for (const key of cellMarks ?? []) {
+                restoredMarks[key] = true;
+            }
 
             pendingProjectRestoreRef.current = {
                 paletteColors,
-                cellEdits,
+                cellEdits: legacySplit.colorEdits,
+                cellMarks: restoredMarks,
                 editHistory: history,
+                markEditHistory: markHistory ?? { undo: [], redo: [] },
             };
             pendingStrokeRef.current.clear();
 
@@ -1042,6 +1363,15 @@ export function usePatternModel(
         imageGridSizeBeads,
         setSchemeSizeBeads,
         restoreCellAt,
+        cellMarks,
+        setCellMarked,
+        clearCellMark,
+        endMarkEditStroke,
+        applyMarkEditBatch,
+        undoMarkEdit,
+        redoMarkEdit,
+        canUndoMarkEdit,
+        canRedoMarkEdit,
         baseCells,
         exportProjectData,
         loadProject,

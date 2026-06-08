@@ -2,7 +2,9 @@ import { type BrickCell, type GridLayout } from "../../beadMath";
 import {
     EMPTY_PALETTE_INDEX,
     getBasePaletteIndex,
+    isMarkedKey,
     type CellEditChange,
+    type MarkEditChange,
     cellKey,
 } from "./cellEditHistory";
 import type { SchemeSizeBeads } from "./schemeGrid";
@@ -199,6 +201,82 @@ export function floodFillRestoreChanges(
 
         if (from === to) continue;
         changes.push({ row, col, from, to });
+    }
+
+    return changes;
+}
+
+export function floodFillMarkChanges(
+    cells: BrickCell[],
+    marks: Record<string, boolean>,
+    schemeSize: SchemeSizeBeads | undefined,
+    layout: GridLayout,
+    startRow: number,
+    startCol: number,
+): MarkEditChange[] {
+    const lookup = buildPaletteIndexLookup(cells);
+    const startKey = cellKey(startRow, startCol);
+    const sourceIndex = lookup.get(startKey) ?? EMPTY_PALETTE_INDEX;
+
+    if (sourceIndex === EMPTY_PALETTE_INDEX) {
+        return [];
+    }
+
+    const region = floodFillRegion(
+        cells,
+        schemeSize,
+        layout,
+        startRow,
+        startCol,
+    );
+
+    const changes: MarkEditChange[] = [];
+
+    for (const { row, col } of region) {
+        const key = cellKey(row, col);
+        const from = isMarkedKey(marks, key);
+
+        if (!from) {
+            changes.push({ row, col, from: false, to: true });
+        }
+    }
+
+    return changes;
+}
+
+export function floodFillUnmarkChanges(
+    cells: BrickCell[],
+    marks: Record<string, boolean>,
+    schemeSize: SchemeSizeBeads | undefined,
+    layout: GridLayout,
+    startRow: number,
+    startCol: number,
+): MarkEditChange[] {
+    const lookup = buildPaletteIndexLookup(cells);
+    const startKey = cellKey(startRow, startCol);
+    const sourceIndex = lookup.get(startKey) ?? EMPTY_PALETTE_INDEX;
+
+    if (sourceIndex === EMPTY_PALETTE_INDEX) {
+        return [];
+    }
+
+    const region = floodFillRegion(
+        cells,
+        schemeSize,
+        layout,
+        startRow,
+        startCol,
+    );
+
+    const changes: MarkEditChange[] = [];
+
+    for (const { row, col } of region) {
+        const key = cellKey(row, col);
+        const from = isMarkedKey(marks, key);
+
+        if (from) {
+            changes.push({ row, col, from: true, to: false });
+        }
     }
 
     return changes;

@@ -2,13 +2,7 @@ import type { DragEventHandler, RefObject } from "react";
 import { BackgroundColorField } from "./BackgroundColorField";
 import { DeferredRangeSlider } from "./DeferredRangeSlider";
 import type { BackgroundMode, GridLayout } from "../../beadMath";
-import type { CanvasBackground } from "../../features/preview/canvasUtils";
 import { PROJECT_FILE_EXTENSION } from "../../features/project/projectFile";
-import {
-    PREVIEW_ZOOM_MAX,
-    PREVIEW_ZOOM_MIN,
-    PREVIEW_ZOOM_STEP,
-} from "../../features/preview/previewZoom";
 
 type SettingsPanelProps = {
     fileInputRef: RefObject<HTMLInputElement | null>;
@@ -29,15 +23,7 @@ type SettingsPanelProps = {
     onBackgroundModeChange: (value: BackgroundMode) => void;
     backgroundHex: string;
     onBackgroundHexChange: (value: string) => void;
-    previewZoom: number;
-    onPreviewZoomChange: (value: number) => void;
-    labelPaletteIndices: boolean;
-    onLabelPaletteIndicesChange: (value: boolean) => void;
-    canvasBackground: CanvasBackground;
-    onCanvasBackgroundChange: (value: CanvasBackground) => void;
     onResetPattern: () => void;
-    beadCount: number;
-    totalCells: number;
     canExport: boolean;
     canSaveProject: boolean;
     onExport: () => void;
@@ -63,15 +49,7 @@ export function SettingsPanel({
     onBackgroundModeChange,
     backgroundHex,
     onBackgroundHexChange,
-    previewZoom,
-    onPreviewZoomChange,
-    labelPaletteIndices,
-    onLabelPaletteIndicesChange,
-    canvasBackground,
-    onCanvasBackgroundChange,
     onResetPattern,
-    beadCount,
-    totalCells,
     canExport,
     canSaveProject,
     onExport,
@@ -191,71 +169,6 @@ export function SettingsPanel({
                     />
                 </label>
             ) : null}
-
-            <div className="field">
-                <span className="label">Фон канвасу схеми</span>
-                <div className="layout-toggle">
-                    <label className="layout-option">
-                        <input
-                            type="radio"
-                            name="canvasBackground"
-                            checked={canvasBackground === "checkerboard"}
-                            onChange={() =>
-                                onCanvasBackgroundChange("checkerboard")
-                            }
-                        />
-                        Шахматка
-                    </label>
-                    <label className="layout-option">
-                        <input
-                            type="radio"
-                            name="canvasBackground"
-                            checked={canvasBackground === "white"}
-                            onChange={() => onCanvasBackgroundChange("white")}
-                        />
-                        Білий
-                    </label>
-                    <label className="layout-option">
-                        <input
-                            type="radio"
-                            name="canvasBackground"
-                            checked={canvasBackground === "black"}
-                            onChange={() => onCanvasBackgroundChange("black")}
-                        />
-                        Чорний
-                    </label>
-                </div>
-            </div>
-
-            <label className="field checkbox">
-                <input
-                    type="checkbox"
-                    checked={labelPaletteIndices}
-                    onChange={(event) =>
-                        onLabelPaletteIndicesChange(event.target.checked)
-                    }
-                />
-                Номери кольорів на схемі
-            </label>
-
-            <DeferredRangeSlider
-                min={PREVIEW_ZOOM_MIN}
-                max={PREVIEW_ZOOM_MAX}
-                step={PREVIEW_ZOOM_STEP}
-                value={previewZoom}
-                onCommit={onPreviewZoomChange}
-                aria-label="Масштаб перегляду схеми"
-                label={() => "Масштаб перегляду схеми"}
-            />
-
-            <div className="stats">
-                <div>
-                    Бісеринок на схемі: <strong>{beadCount}</strong>
-                </div>
-                <div>
-                    Клітинок (разом із фоном): <strong>{totalCells}</strong>
-                </div>
-            </div>
 
             <button
                 type="button"

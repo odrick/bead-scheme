@@ -176,23 +176,7 @@ export default function App() {
                         }
                         backgroundHex={patternModel.backgroundHex}
                         onBackgroundHexChange={patternModel.setBackgroundHex}
-                        previewZoom={patternModel.previewZoom}
-                        onPreviewZoomChange={(value) =>
-                            commitWithRendering(() =>
-                                patternModel.setPreviewZoom(value),
-                            )
-                        }
-                        labelPaletteIndices={patternModel.labelPaletteIndices}
-                        onLabelPaletteIndicesChange={
-                            patternModel.setLabelPaletteIndices
-                        }
-                        canvasBackground={patternModel.canvasBackground}
-                        onCanvasBackgroundChange={
-                            patternModel.setCanvasBackground
-                        }
                         onResetPattern={patternModel.resetPattern}
-                        beadCount={patternModel.beadCount}
-                        totalCells={patternModel.cells.length}
                         canExport={
                             patternModel.hasPattern && !!imageUpload.bitmap
                         }
@@ -244,19 +228,34 @@ export default function App() {
                         previewZoom={patternModel.previewZoom}
                         onPreviewZoomChange={patternModel.setPreviewZoom}
                         labelPaletteIndices={patternModel.labelPaletteIndices}
+                        onLabelPaletteIndicesChange={
+                            patternModel.setLabelPaletteIndices
+                        }
                         gridLayout={patternModel.gridLayout}
                         canvasBackground={patternModel.canvasBackground}
+                        onCanvasBackgroundChange={
+                            patternModel.setCanvasBackground
+                        }
                         onCellPaletteIndexChange={
                             patternModel.setCellPaletteIndex
                         }
                         onCellEditStrokeEnd={patternModel.endCellEditStroke}
                         onCellEditBatch={patternModel.applyCellEditBatch}
                         onRestoreCell={patternModel.restoreCellAt}
+                        cellMarks={patternModel.cellMarks}
+                        onSetCellMarked={patternModel.setCellMarked}
+                        onClearCellMark={patternModel.clearCellMark}
+                        onMarkEditBatch={patternModel.applyMarkEditBatch}
+                        onMarkEditStrokeEnd={patternModel.endMarkEditStroke}
                         baseCells={patternModel.baseCells}
                         onUndoCellEdit={patternModel.undoCellEdit}
                         onRedoCellEdit={patternModel.redoCellEdit}
                         canUndoCellEdit={patternModel.canUndoCellEdit}
                         canRedoCellEdit={patternModel.canRedoCellEdit}
+                        onUndoMarkEdit={patternModel.undoMarkEdit}
+                        onRedoMarkEdit={patternModel.redoMarkEdit}
+                        canUndoMarkEdit={patternModel.canUndoMarkEdit}
+                        canRedoMarkEdit={patternModel.canRedoMarkEdit}
                         schemeSizeBeads={patternModel.schemeSizeBeads}
                         minSchemeSizeBeads={patternModel.imageGridSizeBeads}
                         onSchemeSizeChange={patternModel.setSchemeSizeBeads}

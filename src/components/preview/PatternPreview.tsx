@@ -7,16 +7,22 @@ import {
     type SetStateAction,
 } from "react";
 import { rgbToCss, type BrickCell, type GridLayout, type RGB } from "../../beadMath";
+import { DeferredRangeSlider } from "../controls/DeferredRangeSlider";
 import {
     computeFitPreviewZoom,
+    PREVIEW_ZOOM_MAX,
+    PREVIEW_ZOOM_MIN,
     PREVIEW_ZOOM_STEP,
 } from "../../features/preview/previewZoom";
 import {
     floodFillChanges,
+    floodFillMarkChanges,
     floodFillRestoreChanges,
+    floodFillUnmarkChanges,
 } from "../../features/pattern/floodFill";
 import {
-    MARKED_PALETTE_INDEX,
+    applyMarksToCells,
+    type MarkEditChange,
     type PatternPaintSelection,
 } from "../../features/pattern/cellEditHistory";
 import {
@@ -32,6 +38,7 @@ import {
 } from "../../features/preview/canvasUtils";
 
 type EditTool = "pan" | "pencil" | "eraser" | "fill";
+type SchemeMode = "editing" | "weaving";
 
 type PatternPreviewProps = {
     autoFitZoomKey: number;
@@ -42,8 +49,10 @@ type PatternPreviewProps = {
     previewZoom: number;
     onPreviewZoomChange: Dispatch<SetStateAction<number>>;
     labelPaletteIndices: boolean;
+    onLabelPaletteIndicesChange: (value: boolean) => void;
     gridLayout: GridLayout;
     canvasBackground: CanvasBackground;
+    onCanvasBackgroundChange: (value: CanvasBackground) => void;
     onCellPaletteIndexChange: (
         row: number,
         col: number,
@@ -64,11 +73,29 @@ type PatternPreviewProps = {
         col: number,
         options?: { stroke?: boolean },
     ) => void;
+    cellMarks: Record<string, boolean>;
+    onSetCellMarked: (
+        row: number,
+        col: number,
+        marked: boolean,
+        options?: { stroke?: boolean },
+    ) => void;
+    onClearCellMark: (
+        row: number,
+        col: number,
+        options?: { stroke?: boolean },
+    ) => void;
+    onMarkEditBatch: (changes: MarkEditChange[]) => void;
+    onMarkEditStrokeEnd: () => void;
     baseCells: BrickCell[];
     onUndoCellEdit: () => void;
     onRedoCellEdit: () => void;
     canUndoCellEdit: boolean;
     canRedoCellEdit: boolean;
+    onUndoMarkEdit: () => void;
+    onRedoMarkEdit: () => void;
+    canUndoMarkEdit: boolean;
+    canRedoMarkEdit: boolean;
     schemeSizeBeads: { width: number; height: number };
     minSchemeSizeBeads: { width: number; height: number };
     onSchemeSizeChange: (width: number, height: number) => void;
@@ -235,6 +262,151 @@ function FitToWindowIcon() {
     );
 }
 
+function PaletteLabelsIcon() {
+    return (
+        <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden
+        >
+            <text
+                x="12"
+                y="16.5"
+                textAnchor="middle"
+                fontSize="11"
+                fontWeight="700"
+                fontFamily="system-ui, sans-serif"
+            >
+                123
+            </text>
+        </svg>
+    );
+}
+
+function SchemeSizeIcon() {
+    return (
+        <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+        >
+            <rect x="5" y="5" width="14" height="14" rx="1" />
+            <path d="M9 5v14" />
+            <path d="M15 5v14" />
+            <path d="M5 9h14" />
+            <path d="M5 15h14" />
+        </svg>
+    );
+}
+
+const CANVAS_BACKGROUND_OPTIONS: Array<{
+    value: CanvasBackground;
+    label: string;
+}> = [
+    { value: "checkerboard", label: "Шахматка" },
+    { value: "white", label: "Білий" },
+    { value: "black", label: "Чорний" },
+];
+
+function CanvasBackgroundSwatch({
+    background,
+    className = "",
+}: {
+    background: CanvasBackground;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`pattern-canvas-bg-swatch pattern-canvas-bg-swatch--${background}${className ? ` ${className}` : ""}`}
+            aria-hidden
+        />
+    );
+}
+
+type PatternCanvasBackgroundMenuProps = {
+    value: CanvasBackground;
+    onChange: (value: CanvasBackground) => void;
+};
+
+function PatternCanvasBackgroundMenu({
+    value,
+    onChange,
+}: PatternCanvasBackgroundMenuProps) {
+    const rootRef = useRef<HTMLDivElement>(null);
+    const [open, setOpen] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+
+        const onDocumentMouseDown = (event: MouseEvent) => {
+            if (!rootRef.current?.contains(event.target as Node)) {
+                setOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", onDocumentMouseDown);
+        return () =>
+            document.removeEventListener("mousedown", onDocumentMouseDown);
+    }, [open]);
+
+    const pick = (next: CanvasBackground) => {
+        onChange(next);
+        setOpen(false);
+    };
+
+    return (
+        <div
+            ref={rootRef}
+            className={`pattern-canvas-bg-menu${open ? " open" : ""}`}
+        >
+            <button
+                type="button"
+                className="pattern-tool-btn"
+                title="Фон канвасу схеми"
+                aria-label="Фон канвасу схеми"
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                onClick={() => setOpen((current) => !current)}
+            >
+                <CanvasBackgroundSwatch background={value} />
+            </button>
+
+            {open && (
+                <ul
+                    className="pattern-canvas-bg-options"
+                    role="listbox"
+                    aria-label="Фон канвасу схеми"
+                >
+                    {CANVAS_BACKGROUND_OPTIONS.map((option) => (
+                        <li key={option.value} role="presentation">
+                            <button
+                                type="button"
+                                role="option"
+                                aria-selected={value === option.value}
+                                className={`pattern-canvas-bg-option${value === option.value ? " active" : ""}`}
+                                onClick={() => pick(option.value)}
+                            >
+                                <CanvasBackgroundSwatch
+                                    background={option.value}
+                                />
+                                <span>{option.label}</span>
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+}
+
 function RestoreColorIcon() {
     return (
         <svg
@@ -269,12 +441,14 @@ function MarkStarIcon() {
 }
 
 type PatternColorComboboxProps = {
+    mode: SchemeMode;
     palette: RGB[];
     selection: PatternPaintSelection;
     onSelect: (selection: PatternPaintSelection) => void;
 };
 
 function PatternColorCombobox({
+    mode,
     palette,
     selection,
     onSelect,
@@ -343,57 +517,69 @@ function PatternColorCombobox({
                 <ul
                     className="pattern-color-menu"
                     role="listbox"
-                    aria-label="Колір з палітри"
+                    aria-label={
+                        mode === "editing"
+                            ? "Колір з палітри"
+                            : "Інструмент відміток"
+                    }
                 >
-                    {palette.map((color, index) => (
-                        <li key={index} role="presentation">
-                            <button
-                                type="button"
-                                role="option"
-                                aria-selected={
-                                    isPaletteSelected &&
-                                    selection.index === index
-                                }
-                                aria-label={`Колір ${index + 1}`}
-                                className={`pattern-color-option${isPaletteSelected && selection.index === index ? " active" : ""}`}
-                                style={{ background: rgbToCss(color) }}
-                                onClick={() =>
-                                    pick({ kind: "palette", index })
-                                }
-                            />
-                        </li>
-                    ))}
-                    <li
-                        className="pattern-color-menu-divider"
-                        role="separator"
-                        aria-hidden
-                    />
-                    <li role="presentation">
-                        <button
-                            type="button"
-                            role="option"
-                            aria-selected={selection.kind === "restore"}
-                            aria-label="Відновлення кольору"
-                            title="Відновлення кольору"
-                            className={`pattern-color-option pattern-color-option--restore${selection.kind === "restore" ? " active" : ""}`}
-                            onClick={() => pick({ kind: "restore" })}
-                        >
-                            <RestoreColorIcon />
-                        </button>
-                    </li>
-                    <li role="presentation">
-                        <button
-                            type="button"
-                            role="option"
-                            aria-selected={selection.kind === "mark"}
-                            aria-label="Відмітки"
-                            title="Відмітки"
-                            className={`pattern-color-option pattern-color-option--mark${selection.kind === "mark" ? " active" : ""}`}
-                            onClick={() => pick({ kind: "mark" })}
-                        >
-                            <MarkStarIcon />
-                        </button>
-                    </li>
+                    {mode === "editing"
+                        ? palette.map((color, index) => (
+                              <li key={index} role="presentation">
+                                  <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={
+                                          isPaletteSelected &&
+                                          selection.index === index
+                                      }
+                                      aria-label={`Колір ${index + 1}`}
+                                      className={`pattern-color-option${isPaletteSelected && selection.index === index ? " active" : ""}`}
+                                      style={{ background: rgbToCss(color) }}
+                                      onClick={() =>
+                                          pick({ kind: "palette", index })
+                                      }
+                                  />
+                              </li>
+                          ))
+                        : (
+                              <>
+                                  <li role="presentation">
+                                      <button
+                                          type="button"
+                                          role="option"
+                                          aria-selected={
+                                              selection.kind === "restore"
+                                          }
+                                          aria-label="Відновлення кольору"
+                                          title="Відновлення кольору"
+                                          className={`pattern-color-option pattern-color-option--restore${selection.kind === "restore" ? " active" : ""}`}
+                                          onClick={() =>
+                                              pick({ kind: "restore" })
+                                          }
+                                      >
+                                          <RestoreColorIcon />
+                                      </button>
+                                  </li>
+                                  <li role="presentation">
+                                      <button
+                                          type="button"
+                                          role="option"
+                                          aria-selected={
+                                              selection.kind === "mark"
+                                          }
+                                          aria-label="Відмітка"
+                                          title="Відмітка"
+                                          className={`pattern-color-option pattern-color-option--mark${selection.kind === "mark" ? " active" : ""}`}
+                                          onClick={() =>
+                                              pick({ kind: "mark" })
+                                          }
+                                      >
+                                          <MarkStarIcon />
+                                      </button>
+                                  </li>
+                              </>
+                          )}
                 </ul>
             )}
         </div>
@@ -405,6 +591,67 @@ type PatternSchemeSizeControlsProps = {
     minSchemeSize: SchemeSizeBeads;
     onChange: (width: number, height: number) => void;
 };
+
+type PatternSchemeSizePopoverProps = PatternSchemeSizeControlsProps;
+
+function PatternSchemeSizePopover({
+    schemeSize,
+    minSchemeSize,
+    onChange,
+}: PatternSchemeSizePopoverProps) {
+    const anchorRef = useRef<HTMLDivElement>(null);
+    const [open, setOpen] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+
+        const onDocumentMouseDown = (event: MouseEvent) => {
+            if (!anchorRef.current?.contains(event.target as Node)) {
+                setOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", onDocumentMouseDown);
+        return () =>
+            document.removeEventListener("mousedown", onDocumentMouseDown);
+    }, [open]);
+
+    return (
+        <div
+            ref={anchorRef}
+            className={`pattern-scheme-size-anchor${open ? " open" : ""}`}
+        >
+            <button
+                type="button"
+                className="pattern-tool-btn"
+                title="Розмір схеми"
+                aria-label="Розмір схеми"
+                aria-expanded={open}
+                aria-haspopup="dialog"
+                onClick={() => setOpen((value) => !value)}
+            >
+                <SchemeSizeIcon />
+            </button>
+
+            {open && (
+                <div
+                    className="pattern-scheme-size-popover"
+                    role="dialog"
+                    aria-label="Розмір схеми в бісеринках"
+                >
+                    <div className="pattern-scheme-size-popover-title">
+                        Розмір схеми
+                    </div>
+                    <PatternSchemeSizeControls
+                        schemeSize={schemeSize}
+                        minSchemeSize={minSchemeSize}
+                        onChange={onChange}
+                    />
+                </div>
+            )}
+        </div>
+    );
+}
 
 function PatternSchemeSizeControls({
     schemeSize,
@@ -433,10 +680,7 @@ function PatternSchemeSizeControls({
     };
 
     return (
-        <div
-            className="pattern-scheme-size"
-            title="Розмір схеми в бісеринках (ширина × висота)"
-        >
+        <div className="pattern-scheme-size">
             <label className="pattern-scheme-size-field">
                 <span className="pattern-scheme-size-label">Ш</span>
                 <input
@@ -487,17 +731,28 @@ export function PatternPreview({
     previewZoom,
     onPreviewZoomChange,
     labelPaletteIndices,
+    onLabelPaletteIndicesChange,
     gridLayout,
     canvasBackground,
+    onCanvasBackgroundChange,
     onCellPaletteIndexChange,
     onCellEditStrokeEnd,
     onCellEditBatch,
     onRestoreCell,
+    cellMarks,
+    onSetCellMarked,
+    onClearCellMark,
+    onMarkEditBatch,
+    onMarkEditStrokeEnd,
     baseCells,
     onUndoCellEdit,
     onRedoCellEdit,
     canUndoCellEdit,
     canRedoCellEdit,
+    onUndoMarkEdit,
+    onRedoMarkEdit,
+    canUndoMarkEdit,
+    canRedoMarkEdit,
     schemeSizeBeads,
     minSchemeSizeBeads,
     onSchemeSizeChange,
@@ -513,10 +768,23 @@ export function PatternPreview({
         scrollTop: 0,
     });
 
+    const [schemeMode, setSchemeMode] = useState<SchemeMode>("editing");
     const [editTool, setEditTool] = useState<EditTool>("pan");
     const [paintSelection, setPaintSelection] =
         useState<PatternPaintSelection>({ kind: "palette", index: 0 });
     const [isPanning, setIsPanning] = useState(false);
+
+    const displayCells =
+        schemeMode === "weaving"
+            ? applyMarksToCells(cells, cellMarks)
+            : cells;
+
+    const canUndo =
+        schemeMode === "weaving" ? canUndoMarkEdit : canUndoCellEdit;
+    const canRedo =
+        schemeMode === "weaving" ? canRedoMarkEdit : canRedoCellEdit;
+    const onUndo = schemeMode === "weaving" ? onUndoMarkEdit : onUndoCellEdit;
+    const onRedo = schemeMode === "weaving" ? onRedoMarkEdit : onRedoCellEdit;
 
     const lastAutoFitKeyRef = useRef(0);
 
@@ -575,6 +843,22 @@ export function PatternPreview({
     }, [patternPalette.length]);
 
     useEffect(() => {
+        setPaintSelection((selection) => {
+            if (schemeMode === "editing") {
+                if (selection.kind === "palette") return selection;
+
+                return { kind: "palette", index: 0 };
+            }
+
+            if (selection.kind === "mark" || selection.kind === "restore") {
+                return selection;
+            }
+
+            return { kind: "mark" };
+        });
+    }, [schemeMode]);
+
+    useEffect(() => {
         const wrap = patternWrapRef.current;
         if (!wrap || !bitmap) return;
 
@@ -620,7 +904,7 @@ export function PatternPreview({
         };
 
         const metrics = computeBrickLayout(
-            cells,
+            displayCells,
             cellSizePx,
             previewZoom,
             PREVIEW_PAD,
@@ -657,7 +941,7 @@ export function PatternPreview({
         if (needsFullRepaint) {
             paintBrickPreview(
                 ctx,
-                cells,
+                displayCells,
                 cellSizePx,
                 patternPalette,
                 options,
@@ -665,15 +949,19 @@ export function PatternPreview({
             paintSnapshotRef.current = {
                 layoutKey,
                 paletteKey,
-                cells,
+                cells: displayCells,
             };
             return;
         }
 
-        const changes = findChangedBrickCells(snapshot.cells, cells);
+        const changes = findChangedBrickCells(snapshot.cells, displayCells);
 
         if (changes.length === 0) {
-            paintSnapshotRef.current = { layoutKey, paletteKey, cells };
+            paintSnapshotRef.current = {
+                layoutKey,
+                paletteKey,
+                cells: displayCells,
+            };
             return;
         }
 
@@ -685,12 +973,16 @@ export function PatternPreview({
         if (changes.length > incrementalLimit) {
             paintBrickPreview(
                 ctx,
-                cells,
+                displayCells,
                 cellSizePx,
                 patternPalette,
                 options,
             );
-            paintSnapshotRef.current = { layoutKey, paletteKey, cells };
+            paintSnapshotRef.current = {
+                layoutKey,
+                paletteKey,
+                cells: displayCells,
+            };
             return;
         }
 
@@ -707,10 +999,14 @@ export function PatternPreview({
                 strokeWidth: Math.max(0.5, previewZoom * 0.35),
             },
         );
-        paintSnapshotRef.current = { layoutKey, paletteKey, cells };
+        paintSnapshotRef.current = {
+            layoutKey,
+            paletteKey,
+            cells: displayCells,
+        };
     }, [
         bitmap,
-        cells,
+        displayCells,
         cellSizePx,
         patternPalette,
         previewZoom,
@@ -739,6 +1035,50 @@ export function PatternPreview({
 
             if (!cell) return;
 
+            if (schemeMode === "weaving") {
+                if (editTool === "fill") {
+                    if (paintSelection.kind === "restore") {
+                        onMarkEditBatch(
+                            floodFillUnmarkChanges(
+                                cells,
+                                cellMarks,
+                                schemeSizeBeads,
+                                gridLayout,
+                                cell.row,
+                                cell.col,
+                            ),
+                        );
+                    } else {
+                        onMarkEditBatch(
+                            floodFillMarkChanges(
+                                cells,
+                                cellMarks,
+                                schemeSizeBeads,
+                                gridLayout,
+                                cell.row,
+                                cell.col,
+                            ),
+                        );
+                    }
+
+                    return;
+                }
+
+                if (editTool === "pencil") {
+                    if (paintSelection.kind === "restore") {
+                        onClearCellMark(cell.row, cell.col, { stroke: true });
+                    } else {
+                        onSetCellMarked(cell.row, cell.col, true, {
+                            stroke: true,
+                        });
+                    }
+                } else if (editTool === "eraser") {
+                    onClearCellMark(cell.row, cell.col, { stroke: true });
+                }
+
+                return;
+            }
+
             if (editTool === "fill") {
                 if (paintSelection.kind === "restore") {
                     onCellEditBatch(
@@ -751,12 +1091,7 @@ export function PatternPreview({
                             cell.col,
                         ),
                     );
-                } else {
-                    const targetIndex =
-                        paintSelection.kind === "mark"
-                            ? MARKED_PALETTE_INDEX
-                            : paintSelection.index;
-
+                } else if (paintSelection.kind === "palette") {
                     onCellEditBatch(
                         floodFillChanges(
                             cells,
@@ -764,7 +1099,7 @@ export function PatternPreview({
                             gridLayout,
                             cell.row,
                             cell.col,
-                            targetIndex,
+                            paintSelection.index,
                         ),
                     );
                 }
@@ -773,16 +1108,7 @@ export function PatternPreview({
             }
 
             if (editTool === "pencil") {
-                if (paintSelection.kind === "restore") {
-                    onRestoreCell(cell.row, cell.col, { stroke: true });
-                } else if (paintSelection.kind === "mark") {
-                    onCellPaletteIndexChange(
-                        cell.row,
-                        cell.col,
-                        MARKED_PALETTE_INDEX,
-                        { stroke: true },
-                    );
-                } else {
+                if (paintSelection.kind === "palette") {
                     onCellPaletteIndexChange(
                         cell.row,
                         cell.col,
@@ -798,15 +1124,20 @@ export function PatternPreview({
         },
         [
             baseCells,
+            cellMarks,
             cells,
             cellSizePx,
             editTool,
             gridLayout,
             onCellPaletteIndexChange,
             onCellEditBatch,
+            onClearCellMark,
+            onMarkEditBatch,
             onRestoreCell,
+            onSetCellMarked,
             paintSelection,
             previewZoom,
+            schemeMode,
             schemeSizeBeads,
         ],
     );
@@ -830,7 +1161,11 @@ export function PatternPreview({
 
         const onMouseUp = () => {
             if (isPaintingRef.current) {
-                onCellEditStrokeEnd();
+                if (schemeMode === "weaving") {
+                    onMarkEditStrokeEnd();
+                } else {
+                    onCellEditStrokeEnd();
+                }
             }
 
             isPanningRef.current = false;
@@ -845,7 +1180,7 @@ export function PatternPreview({
             window.removeEventListener("mousemove", onMouseMove);
             window.removeEventListener("mouseup", onMouseUp);
         };
-    }, [applyToolAt, onCellEditStrokeEnd]);
+    }, [applyToolAt, onCellEditStrokeEnd, onMarkEditStrokeEnd, schemeMode]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -853,19 +1188,19 @@ export function PatternPreview({
 
             const key = event.key.toLowerCase();
             if (key === "z" && !event.shiftKey) {
-                if (!canUndoCellEdit) return;
+                if (!canUndo) return;
                 event.preventDefault();
-                onUndoCellEdit();
+                onUndo();
             } else if (key === "y" || (key === "z" && event.shiftKey)) {
-                if (!canRedoCellEdit) return;
+                if (!canRedo) return;
                 event.preventDefault();
-                onRedoCellEdit();
+                onRedo();
             }
         };
 
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [canUndoCellEdit, canRedoCellEdit, onUndoCellEdit, onRedoCellEdit]);
+    }, [canUndo, canRedo, onUndo, onRedo]);
 
     const handleWrapMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
         if (editTool !== "pan" || event.button !== 0) return;
@@ -900,7 +1235,36 @@ export function PatternPreview({
 
     return (
         <section className="preview-block preview-scheme">
-            <h2>Схема</h2>
+            <div className="preview-scheme-header">
+                <h2>Схема</h2>
+
+                {bitmap && patternPalette.length > 0 ? (
+                    <div
+                        className="pattern-mode-toggle"
+                        role="group"
+                        aria-label="Режим схеми"
+                    >
+                        <label className="pattern-mode-option">
+                            <input
+                                type="radio"
+                                name="schemeMode"
+                                checked={schemeMode === "editing"}
+                                onChange={() => setSchemeMode("editing")}
+                            />
+                            Редагування
+                        </label>
+                        <label className="pattern-mode-option">
+                            <input
+                                type="radio"
+                                name="schemeMode"
+                                checked={schemeMode === "weaving"}
+                                onChange={() => setSchemeMode("weaving")}
+                            />
+                            Плетіння
+                        </label>
+                    </div>
+                ) : null}
+            </div>
 
             {bitmap && patternPalette.length > 0 && (
                 <div className="pattern-toolbar">
@@ -961,8 +1325,8 @@ export function PatternPreview({
                             className="pattern-tool-btn"
                             title="Відміна"
                             aria-label="Відміна"
-                            disabled={!canUndoCellEdit}
-                            onClick={onUndoCellEdit}
+                            disabled={!canUndo}
+                            onClick={onUndo}
                         >
                             <UndoIcon />
                         </button>
@@ -971,32 +1335,79 @@ export function PatternPreview({
                             className="pattern-tool-btn"
                             title="Повтор"
                             aria-label="Повтор"
-                            disabled={!canRedoCellEdit}
-                            onClick={onRedoCellEdit}
+                            disabled={!canRedo}
+                            onClick={onRedo}
                         >
                             <RedoIcon />
                         </button>
                     </div>
 
                     <PatternColorCombobox
+                        mode={schemeMode}
                         palette={patternPalette}
                         selection={paintSelection}
                         onSelect={setPaintSelection}
                     />
 
-                    <PatternSchemeSizeControls
-                        schemeSize={schemeSizeBeads}
-                        minSchemeSize={minSchemeSizeBeads}
-                        onChange={onSchemeSizeChange}
+                    <PatternCanvasBackgroundMenu
+                        value={canvasBackground}
+                        onChange={onCanvasBackgroundChange}
                     />
 
                     <button
                         type="button"
-                        className="pattern-tool-btn pattern-tool-btn--text"
+                        className={`pattern-tool-btn${labelPaletteIndices ? " active" : ""}`}
+                        aria-pressed={labelPaletteIndices}
+                        title={
+                            labelPaletteIndices
+                                ? "Приховати номери кольорів на схемі"
+                                : "Показати номери кольорів на схемі"
+                        }
+                        aria-label={
+                            labelPaletteIndices
+                                ? "Приховати номери кольорів на схемі"
+                                : "Показати номери кольорів на схемі"
+                        }
+                        onClick={() =>
+                            onLabelPaletteIndicesChange(!labelPaletteIndices)
+                        }
+                    >
+                        <PaletteLabelsIcon />
+                    </button>
+
+                    <div
+                        className="pattern-preview-zoom"
+                        title="Масштаб перегляду схеми"
+                    >
+                        <DeferredRangeSlider
+                            variant="inline"
+                            min={PREVIEW_ZOOM_MIN}
+                            max={PREVIEW_ZOOM_MAX}
+                            step={PREVIEW_ZOOM_STEP}
+                            value={previewZoom}
+                            onCommit={(value) => onPreviewZoomChange(value)}
+                            aria-label="Масштаб перегляду схеми"
+                            tooltip="Масштаб перегляду схеми"
+                        />
+                    </div>
+
+                    <button
+                        type="button"
+                        className="pattern-tool-btn"
                         title="Вписати в вікно"
                         aria-label="Вписати в вікно"
                         onClick={fitPreviewToWindow}
-                    ><FitToWindowIcon /></button>
+                    >
+                        <FitToWindowIcon />
+                    </button>
+
+                    {schemeMode === "editing" ? (
+                        <PatternSchemeSizePopover
+                            schemeSize={schemeSizeBeads}
+                            minSchemeSize={minSchemeSizeBeads}
+                            onChange={onSchemeSizeChange}
+                        />
+                    ) : null}
                 </div>
             )}
 

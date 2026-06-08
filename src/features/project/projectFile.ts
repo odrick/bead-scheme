@@ -3,7 +3,10 @@ import type {
     GridLayout,
     RGB,
 } from "../../beadMath";
-import type { CellEditChange } from "../pattern/cellEditHistory";
+import type {
+    CellEditChange,
+    MarkEditChange,
+} from "../pattern/cellEditHistory";
 import type { SchemeSizeBeads } from "../pattern/schemeGrid";
 import type { CanvasBackground } from "../preview/canvasUtils";
 import { isMaskKind } from "../mask/maskAssets";
@@ -41,9 +44,14 @@ export type BeadSchemeProject = {
     };
     paletteColors: Record<string, RGB>;
     cellEdits: Record<string, number>;
+    cellMarks?: string[];
     editHistory: {
         undo: CellEditChange[][];
         redo: CellEditChange[][];
+    };
+    markEditHistory?: {
+        undo: MarkEditChange[][];
+        redo: MarkEditChange[][];
     };
 };
 
@@ -106,6 +114,17 @@ function isCellEditChange(value: unknown): value is CellEditChange {
         typeof value.col === "number" &&
         typeof value.from === "number" &&
         typeof value.to === "number"
+    );
+}
+
+function isMarkEditChange(value: unknown): value is MarkEditChange {
+    if (!isRecord(value)) return false;
+
+    return (
+        typeof value.row === "number" &&
+        typeof value.col === "number" &&
+        typeof value.from === "boolean" &&
+        typeof value.to === "boolean"
     );
 }
 
@@ -179,23 +198,50 @@ function parseMaskSettings(value: unknown): ImageMaskSettings {
     };
 }
 
+function parseEditHistorySteps(steps: unknown): CellEditChange[][] {
+    if (!Array.isArray(steps)) return [];
+
+    return steps
+        .filter((step): step is CellEditChange[] => Array.isArray(step))
+        .map((step) => step.filter(isCellEditChange));
+}
+
 function parseEditHistory(value: unknown): BeadSchemeProject["editHistory"] {
     if (!isRecord(value)) {
         return { undo: [], redo: [] };
     }
 
-    const parseSteps = (steps: unknown): CellEditChange[][] => {
+    return {
+        undo: parseEditHistorySteps(value.undo),
+        redo: parseEditHistorySteps(value.redo),
+    };
+}
+
+function parseMarkEditHistory(
+    value: unknown,
+): BeadSchemeProject["markEditHistory"] {
+    if (!isRecord(value)) {
+        return { undo: [], redo: [] };
+    }
+
+    const parseSteps = (steps: unknown): MarkEditChange[][] => {
         if (!Array.isArray(steps)) return [];
 
         return steps
-            .filter((step): step is CellEditChange[] => Array.isArray(step))
-            .map((step) => step.filter(isCellEditChange));
+            .filter((step): step is MarkEditChange[] => Array.isArray(step))
+            .map((step) => step.filter(isMarkEditChange));
     };
 
     return {
         undo: parseSteps(value.undo),
         redo: parseSteps(value.redo),
     };
+}
+
+function parseCellMarks(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+
+    return value.filter((key): key is string => typeof key === "string");
 }
 
 export function parseProjectFile(text: string): BeadSchemeProject {
@@ -281,7 +327,9 @@ export function parseProjectFile(text: string): BeadSchemeProject {
         },
         paletteColors: parsePaletteColors(parsed.paletteColors),
         cellEdits: parseCellEdits(parsed.cellEdits),
+        cellMarks: parseCellMarks(parsed.cellMarks),
         editHistory: parseEditHistory(parsed.editHistory),
+        markEditHistory: parseMarkEditHistory(parsed.markEditHistory),
     };
 }
 
