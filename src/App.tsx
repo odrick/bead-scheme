@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { ExportDialog } from "./components/export/ExportDialog";
 import { SettingsPanel } from "./components/controls/SettingsPanel";
+import { RenderingOverlay } from "./components/overlay/RenderingOverlay";
 import { PaletteSection } from "./components/palette/PaletteSection";
 import { OriginalImagePreview } from "./components/preview/OriginalImagePreview";
 import { PatternPreview } from "./components/preview/PatternPreview";
@@ -12,6 +13,7 @@ import {
 } from "./features/export/exportPatternImage";
 import { useImageUpload } from "./features/image/useImageUpload";
 import { usePatternModel } from "./features/pattern/usePatternModel";
+import { usePatternRenderCommit } from "./features/pattern/usePatternRenderCommit";
 import {
     buildProjectFile,
     downloadProjectFile,
@@ -25,6 +27,7 @@ import { useProjectAutosave } from "./features/project/useProjectAutosave";
 export default function App() {
     const imageUpload = useImageUpload();
     const patternModel = usePatternModel(imageUpload.bitmap);
+    const { isRendering, commitWithRendering } = usePatternRenderCommit();
     const [exportDialogOpen, setExportDialogOpen] = useState(false);
     const [previewAutoFitKey, setPreviewAutoFitKey] = useState(0);
     const projectInputRef = useRef<HTMLInputElement>(null);
@@ -145,9 +148,17 @@ export default function App() {
                         onFileSelect={imageUpload.onFile}
                         onProjectSelect={handleLoadProject}
                         paletteSize={patternModel.paletteSize}
-                        onPaletteSizeChange={patternModel.setPaletteSize}
+                        onPaletteSizeChange={(value) =>
+                            commitWithRendering(() =>
+                                patternModel.setPaletteSize(value),
+                            )
+                        }
                         beadsPerRow={patternModel.beadsPerRow}
-                        onBeadsPerRowChange={patternModel.setBeadsPerRow}
+                        onBeadsPerRowChange={(value) =>
+                            commitWithRendering(() =>
+                                patternModel.setBeadsPerRow(value),
+                            )
+                        }
                         gridLayout={patternModel.gridLayout}
                         onGridLayoutChange={patternModel.setGridLayout}
                         backgroundMode={patternModel.backgroundMode}
@@ -157,7 +168,11 @@ export default function App() {
                         backgroundHex={patternModel.backgroundHex}
                         onBackgroundHexChange={patternModel.setBackgroundHex}
                         previewZoom={patternModel.previewZoom}
-                        onPreviewZoomChange={patternModel.setPreviewZoom}
+                        onPreviewZoomChange={(value) =>
+                            commitWithRendering(() =>
+                                patternModel.setPreviewZoom(value),
+                            )
+                        }
                         labelPaletteIndices={patternModel.labelPaletteIndices}
                         onLabelPaletteIndicesChange={
                             patternModel.setLabelPaletteIndices
@@ -224,6 +239,8 @@ export default function App() {
                 onConfirm={handleExportConfirm}
                 onCancel={() => setExportDialogOpen(false)}
             />
+
+            <RenderingOverlay open={isRendering} />
         </div>
     );
 }

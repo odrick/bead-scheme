@@ -1,5 +1,6 @@
 import type { DragEventHandler, RefObject } from "react";
 import { BackgroundColorField } from "./BackgroundColorField";
+import { DeferredRangeSlider } from "./DeferredRangeSlider";
 import type { BackgroundMode, GridLayout } from "../../beadMath";
 import type { CanvasBackground } from "../../features/preview/canvasUtils";
 import { PROJECT_FILE_EXTENSION } from "../../features/project/projectFile";
@@ -102,39 +103,25 @@ export function SettingsPanel({
                 />
             </label>
 
-            <label className="field">
-                <span className="label">
-                    Кількість кольорів у палітрі: <strong>{paletteSize}</strong>
-                </span>
-                <input
-                    type="range"
-                    min={2}
-                    max={50}
-                    value={paletteSize}
-                    onChange={(event) =>
-                        onPaletteSizeChange(
-                            Number.parseInt(event.target.value, 10),
-                        )
-                    }
-                />
-            </label>
+            <DeferredRangeSlider
+                min={2}
+                max={50}
+                value={paletteSize}
+                onCommit={onPaletteSizeChange}
+                title="Кількість кольорів у палітрі"
+                showNumberInput
+                aria-label="Кількість кольорів у палітрі"
+            />
 
-            <label className="field">
-                <span className="label">
-                    Кількість бісеринок у ряду: <strong>{beadsPerRow}</strong>
-                </span>
-                <input
-                    type="range"
-                    min={2}
-                    max={400}
-                    value={beadsPerRow}
-                    onChange={(event) =>
-                        onBeadsPerRowChange(
-                            Number.parseInt(event.target.value, 10),
-                        )
-                    }
-                />
-            </label>
+            <DeferredRangeSlider
+                min={2}
+                max={400}
+                value={beadsPerRow}
+                onCommit={onBeadsPerRowChange}
+                title="Кількість бісеринок у ряду"
+                showNumberInput
+                aria-label="Кількість бісеринок у ряду"
+            />
 
             <div className="field">
                 <span className="label">Тип сітки схеми</span>
@@ -251,29 +238,22 @@ export function SettingsPanel({
                 Номери кольорів на схемі
             </label>
 
-            <label className="field">
-                <span className="label">
-                    Масштаб перегляду схеми:{" "}
-                    <strong>
-                        {previewZoom < 1
-                            ? previewZoom.toFixed(2)
-                            : previewZoom.toFixed(1)}
-                        ×
-                    </strong>
-                </span>
-                <input
-                    type="range"
-                    min={PREVIEW_ZOOM_MIN}
-                    max={PREVIEW_ZOOM_MAX}
-                    step={PREVIEW_ZOOM_STEP}
-                    value={previewZoom}
-                    onChange={(event) =>
-                        onPreviewZoomChange(
-                            Number.parseFloat(event.target.value),
-                        )
-                    }
-                />
-            </label>
+            <DeferredRangeSlider
+                min={PREVIEW_ZOOM_MIN}
+                max={PREVIEW_ZOOM_MAX}
+                step={PREVIEW_ZOOM_STEP}
+                value={previewZoom}
+                onCommit={onPreviewZoomChange}
+                aria-label="Масштаб перегляду схеми"
+                label={(value) => (
+                    <>
+                        Масштаб перегляду схеми:{" "}
+                        <strong>
+                            {value < 1 ? value.toFixed(2) : value.toFixed(1)}×
+                        </strong>
+                    </>
+                )}
+            />
 
             <div className="stats">
                 <div>

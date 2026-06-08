@@ -1,0 +1,176 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+type DeferredRangeSliderBaseProps = {
+    min: number;
+    max: number;
+    step?: number;
+    value: number;
+    onCommit: (value: number) => void;
+    "aria-label"?: string;
+};
+
+type DeferredRangeSliderProps = DeferredRangeSliderBaseProps &
+    (
+        | {
+              title: string;
+              showNumberInput: true;
+              label?: never;
+          }
+        | {
+              title?: never;
+              showNumberInput?: false;
+              label: (value: number) => ReactNode;
+          }
+    );
+
+export function DeferredRangeSlider({
+    min,
+    max,
+    step,
+    value,
+    onCommit,
+    "aria-label": ariaLabel,
+    ...rest
+}: DeferredRangeSliderProps) {
+    const [draft, setDraft] = useState(value);
+    const [inputDraft, setInputDraft] = useState(String(value));
+    const isDraggingRef = useRef(false);
+    const isInputFocusedRef = useRef(false);
+
+    const showNumberInput = "showNumberInput" in rest && rest.showNumberInput;
+    const title = "title" in rest ? rest.title : undefined;
+    const label = "label" in rest ? rest.label : undefined;
+
+    useEffect(() => {
+        if (!isDraggingRef.current && !isInputFocusedRef.current) {
+            setDraft(value);
+            setInputDraft(String(value));
+        }
+    }, [value]);
+
+    const parseValue = (raw: string, fallback = draft) => {
+        const parsed =
+            step !== undefined
+                ? Number.parseFloat(raw)
+                : Number.parseInt(raw, 10);
+
+        if (Number.isNaN(parsed)) return fallback;
+
+        return Math.min(max, Math.max(min, parsed));
+    };
+
+    const commit = (next: number) => {
+        setDraft(next);
+        setInputDraft(String(next));
+
+        if (next !== value) {
+            onCommit(next);
+        }
+    };
+
+    const updateDraft = (next: number) => {
+        setDraft(next);
+
+        if (!isInputFocusedRef.current) {
+            setInputDraft(String(next));
+        }
+    };
+
+    const commitInput = () => {
+        const next = parseValue(inputDraft);
+        isInputFocusedRef.current = false;
+        commit(next);
+    };
+
+    const resetInput = () => {
+        isInputFocusedRef.current = false;
+        setInputDraft(String(value));
+        setDraft(value);
+    };
+
+    return (
+        <div className="field">
+            <span className="label deferred-range-label">
+                {showNumberInput && title ? (
+                    <>
+                        {title}:{" "}
+                        <input
+                            type="number"
+                            className="deferred-range-value-input"
+                            min={min}
+                            max={max}
+                            step={step ?? 1}
+                            value={inputDraft}
+                            aria-label={ariaLabel}
+                            onFocus={() => {
+                                isInputFocusedRef.current = true;
+                            }}
+                            onChange={(event) => {
+                                setInputDraft(event.target.value);
+                            }}
+                            onBlur={commitInput}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                    event.currentTarget.blur();
+                                } else if (event.key === "Escape") {
+                                    resetInput();
+                                    event.currentTarget.blur();
+                                }
+                            }}
+                        />
+                    </>
+                ) : (
+                    label?.(draft)
+                )}
+            </span>
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={draft}
+                aria-label={
+                    showNumberInput ? `${ariaLabel}, повзунок` : ariaLabel
+                }
+                onPointerDown={(event) => {
+                    isDraggingRef.current = true;
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerUp={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(
+                            event.pointerId,
+                        );
+                    }
+
+                    if (!isDraggingRef.current) return;
+
+                    isDraggingRef.current = false;
+                    commit(parseValue(event.currentTarget.value));
+                }}
+                onPointerCancel={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(
+                            event.pointerId,
+                        );
+                    }
+
+                    isDraggingRef.current = false;
+                    setDraft(value);
+
+                    if (!isInputFocusedRef.current) {
+                        setInputDraft(String(value));
+                    }
+                }}
+                onChange={(event) => {
+                    const next = parseValue(event.target.value);
+                    updateDraft(next);
+
+                    if (!isDraggingRef.current) {
+                        commit(next);
+                    }
+                }}
+            />
+        </div>
+    );
+}
