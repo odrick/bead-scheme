@@ -62,6 +62,30 @@ export function setOverrideValue(
     return { ...cells, [key]: paletteIndex };
 }
 
+export function exportCellEditsFromState(
+    baseCells: BrickCell[],
+    cells: BrickCell[],
+): Record<string, number> {
+    const baseIndexByKey = new Map<string, number>();
+
+    for (const cell of baseCells) {
+        baseIndexByKey.set(cellKey(cell.row, cell.col), cell.paletteIndex);
+    }
+
+    const edits: Record<string, number> = {};
+
+    for (const cell of cells) {
+        const key = cellKey(cell.row, cell.col);
+        const baseIndex = baseIndexByKey.get(key) ?? EMPTY_PALETTE_INDEX;
+
+        if (cell.paletteIndex !== baseIndex) {
+            edits[key] = cell.paletteIndex;
+        }
+    }
+
+    return edits;
+}
+
 export function applyCellEditChanges(
     baseCells: BrickCell[],
     cells: Record<string, number>,

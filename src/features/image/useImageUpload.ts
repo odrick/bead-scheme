@@ -11,6 +11,7 @@ type DropEvent = React.DragEvent<HTMLElement>;
 export function useImageUpload() {
     const [fileUrl, setFileUrl] = useState<string | null>(null);
     const [bitmap, setBitmap] = useState<HTMLImageElement | null>(null);
+    const [bitmapUrl, setBitmapUrl] = useState<string | null>(null);
     const [isUploadDragOver, setIsUploadDragOver] = useState(false);
     const [isOriginalDragOver, setIsOriginalDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +90,10 @@ export function useImageUpload() {
 
         const img = new Image();
         img.decoding = "async";
-        img.onload = () => setBitmap(img);
+        img.onload = () => {
+            setBitmap(img);
+            setBitmapUrl(fileUrl);
+        };
         img.src = fileUrl;
 
         return () => {
@@ -107,6 +111,8 @@ export function useImageUpload() {
 
     return {
         bitmap,
+        fileUrl,
+        bitmapUrl,
         fileInputRef,
         isUploadDragOver,
         isOriginalDragOver,

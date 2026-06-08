@@ -19,6 +19,7 @@ import {
     applyCellEditChanges,
     cellKey,
     EMPTY_PALETTE_INDEX,
+    exportCellEditsFromState,
     getBasePaletteIndex,
     getEffectivePaletteIndex,
     isSchemeBeadIndex,
@@ -154,6 +155,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         cellEdits: Record<string, number>;
         editHistory: { undo: CellEditChange[][]; redo: CellEditChange[][] };
     } | null>(null);
+    const [restoreKey, setRestoreKey] = useState(0);
 
     const baseCellsRef = useRef<BrickCell[]>([]);
     const cellOverridesRef = useRef(cellOverrides);
@@ -371,7 +373,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             undo: pending.editHistory.undo,
             redo: pending.editHistory.redo,
         });
-    }, [bitmap, paletteBaseKey, cellsBaseKey]);
+    }, [bitmap, paletteBaseKey, cellsBaseKey, restoreKey]);
 
     const setPaletteColor = useCallback(
         (index: number, hex: string) => {
@@ -710,10 +712,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
                 paletteOverrides.baseKey === paletteBaseKey
                     ? paletteOverrides.colors
                     : {},
-            cellEdits:
-                cellOverrides.baseKey === cellsBaseKey
-                    ? cellOverrides.cells
-                    : {},
+            cellEdits: exportCellEditsFromState(baseCells, cells),
             editHistory:
                 editHistory.baseKey === cellsBaseKey
                     ? { undo: editHistory.undo, redo: editHistory.redo }
@@ -732,7 +731,8 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         schemeSizeBeads,
         paletteOverrides,
         paletteBaseKey,
-        cellOverrides,
+        baseCells,
+        cells,
         cellsBaseKey,
         editHistory,
     ]);
@@ -758,6 +758,9 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             setLabelPaletteIndices(settings.labelPaletteIndices ?? false);
             setCanvasBackground(settings.canvasBackground);
             setSchemeSizeBeadsState(settings.schemeSize);
+            // Force the restore effect to run even if all other deps are unchanged
+            // (e.g. same image + same settings but different cell edits/palette).
+            setRestoreKey((k) => k + 1);
 
             autoSchemeSizeKeyRef.current = [
                 bitmap?.width ?? 0,

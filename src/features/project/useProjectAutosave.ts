@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
     buildProjectFile,
     encodeImageToBase64,
@@ -25,30 +25,15 @@ type UseProjectAutosaveOptions = {
     onRestore: (project: BeadSchemeProject) => void;
 };
 
-function exportDataFingerprint(projectData: ProjectExportData): string {
-    return JSON.stringify(projectData);
-}
-
-function fingerprintProjectData(
-    projectData: ProjectExportData,
-    image: BeadSchemeProject["image"],
-    bitmap: HTMLImageElement,
-): string {
-    return JSON.stringify({
-        projectData,
-        imageLength: image.base64.length,
-        imageMime: image.mimeType,
-        width: bitmap.naturalWidth,
-        height: bitmap.naturalHeight,
-    });
-}
+type AutosaveController = {
+    saveNow: () => void;
+};
 
 function scheduleIdleTask(task: () => void): () => void {
     if (typeof requestIdleCallback === "function") {
         const id = requestIdleCallback(() => task(), {
             timeout: AUTOSAVE_IDLE_TIMEOUT_MS,
         });
-
         return () => cancelIdleCallback(id);
     }
 
@@ -60,26 +45,34 @@ export function useProjectAutosave({
     bitmap,
     projectData,
     onRestore,
-}: UseProjectAutosaveOptions): void {
+}: UseProjectAutosaveOptions): AutosaveController {
     const bitmapRef = useRef(bitmap);
     const projectDataRef = useRef(projectData);
     const onRestoreRef = useRef(onRestore);
 
     const cachedImageRef = useRef<CachedImage | null>(null);
-    const lastSavedFingerprintRef = useRef("");
+    const lastSavedDataRef = useRef<string>("");
     const saveDebounceRef = useRef<number | null>(null);
     const cancelIdleRef = useRef<(() => void) | null>(null);
     const saveGenerationRef = useRef(0);
     const isSavingRef = useRef(false);
     const quotaWarningShownRef = useRef(false);
     const initialRestoreDoneRef = useRef(false);
-    const suppressSaveRef = useRef(false);
-    const pendingRestoreFingerprintRef = useRef<string | null>(null);
-    const restoredImageRef = useRef<BeadSchemeProject["image"] | null>(null);
 
     bitmapRef.current = bitmap;
     projectDataRef.current = projectData;
     onRestoreRef.current = onRestore;
+
+    const cancelPending = useCallback(() => {
+        if (saveDebounceRef.current !== null) {
+            window.clearTimeout(saveDebounceRef.current);
+            saveDebounceRef.current = null;
+        }
+        if (cancelIdleRef.current) {
+            cancelIdleRef.current();
+            cancelIdleRef.current = null;
+        }
+    }, []);
 
     const performSave = async (generation: number) => {
         if (generation !== saveGenerationRef.current) return;
@@ -90,34 +83,26 @@ export function useProjectAutosave({
         if (!currentBitmap || !currentData) return;
         if (isSavingRef.current) return;
 
+        const dataFingerprint = JSON.stringify(currentData);
+        if (dataFingerprint === lastSavedDataRef.current) return;
+
         isSavingRef.current = true;
 
         try {
-            let encodedImage = cachedImageRef.current;
+            let cached = cachedImageRef.current;
 
-            if (!encodedImage || encodedImage.bitmap !== currentBitmap) {
+            if (!cached || cached.bitmap !== currentBitmap) {
                 const image = await encodeImageToBase64(currentBitmap);
 
                 if (generation !== saveGenerationRef.current) return;
 
-                encodedImage = {
-                    bitmap: currentBitmap,
-                    image,
-                };
-                cachedImageRef.current = encodedImage;
+                cached = { bitmap: currentBitmap, image };
+                cachedImageRef.current = cached;
             }
 
-            const fingerprint = fingerprintProjectData(
-                currentData,
-                encodedImage.image,
-                currentBitmap,
-            );
-
-            if (fingerprint === lastSavedFingerprintRef.current) return;
-
-            const project = buildProjectFile(encodedImage.image, currentData);
+            const project = buildProjectFile(cached.image, currentData);
             saveProjectToLocalStorage(project);
-            lastSavedFingerprintRef.current = fingerprint;
+            lastSavedDataRef.current = dataFingerprint;
         } catch (error) {
             if (
                 error instanceof ProjectAutosaveError &&
@@ -134,18 +119,8 @@ export function useProjectAutosave({
         }
     };
 
-    const queueSave = (immediate = false) => {
-        if (suppressSaveRef.current) return;
-
-        if (saveDebounceRef.current !== null) {
-            window.clearTimeout(saveDebounceRef.current);
-            saveDebounceRef.current = null;
-        }
-
-        if (cancelIdleRef.current) {
-            cancelIdleRef.current();
-            cancelIdleRef.current = null;
-        }
+    const queueSave = useCallback((immediate = false) => {
+        cancelPending();
 
         const run = () => {
             saveDebounceRef.current = null;
@@ -163,67 +138,39 @@ export function useProjectAutosave({
         }
 
         saveDebounceRef.current = window.setTimeout(run, AUTOSAVE_DEBOUNCE_MS);
-    };
+    }, [cancelPending]);
 
+    const saveNow = useCallback(() => {
+        queueSave(true);
+    }, [queueSave]);
+
+    // Restore from localStorage on mount
     useEffect(() => {
         if (initialRestoreDoneRef.current) return;
-
         initialRestoreDoneRef.current = true;
 
         const stored = loadProjectFromLocalStorage();
         if (!stored) return;
 
+        // Pre-populate the image cache so we don't need to re-encode after restore
         cachedImageRef.current = null;
-        restoredImageRef.current = stored.image;
-        suppressSaveRef.current = true;
-        pendingRestoreFingerprintRef.current = exportDataFingerprint({
-            version: stored.version,
-            settings: stored.settings,
-            paletteColors: stored.paletteColors,
-            cellEdits: stored.cellEdits,
-            editHistory: stored.editHistory,
-        });
 
         onRestoreRef.current(stored);
     }, []);
 
+    // Queue save on any state change
     useEffect(() => {
         if (!bitmap || !projectData) return;
-
-        const pendingRestore = pendingRestoreFingerprintRef.current;
-
-        if (pendingRestore) {
-            if (exportDataFingerprint(projectData) !== pendingRestore) return;
-
-            const restoredImage = restoredImageRef.current;
-            if (!restoredImage) return;
-
-            cachedImageRef.current = {
-                bitmap,
-                image: restoredImage,
-            };
-
-            lastSavedFingerprintRef.current = fingerprintProjectData(
-                projectData,
-                restoredImage,
-                bitmap,
-            );
-            pendingRestoreFingerprintRef.current = null;
-            restoredImageRef.current = null;
-            suppressSaveRef.current = false;
-            return;
-        }
-
         queueSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bitmap, projectData]);
 
+    // Flush on page hide / visibility change
     useEffect(() => {
         const flush = () => queueSave(true);
 
         const onVisibilityChange = () => {
-            if (document.visibilityState === "hidden") {
-                flush();
-            }
+            if (document.visibilityState === "hidden") flush();
         };
 
         window.addEventListener("pagehide", flush);
@@ -232,16 +179,10 @@ export function useProjectAutosave({
         return () => {
             window.removeEventListener("pagehide", flush);
             document.removeEventListener("visibilitychange", onVisibilityChange);
-
-            if (saveDebounceRef.current !== null) {
-                window.clearTimeout(saveDebounceRef.current);
-            }
-
-            if (cancelIdleRef.current) {
-                cancelIdleRef.current();
-            }
-
+            cancelPending();
             saveGenerationRef.current += 1;
         };
-    }, []);
+    }, [queueSave, cancelPending]);
+
+    return { saveNow };
 }

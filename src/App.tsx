@@ -30,8 +30,11 @@ export default function App() {
     const { isRendering, commitWithRendering } = usePatternRenderCommit();
     const [exportDialogOpen, setExportDialogOpen] = useState(false);
     const [previewAutoFitKey, setPreviewAutoFitKey] = useState(0);
+    const [pendingLoad, setPendingLoad] = useState<{
+        project: BeadSchemeProject;
+        imageUrl: string;
+    } | null>(null);
     const projectInputRef = useRef<HTMLInputElement>(null);
-    const pendingProjectRef = useRef<BeadSchemeProject | null>(null);
     const skipBitmapAutoFitRef = useRef(false);
 
     const projectDataForAutosave = useMemo(
@@ -39,11 +42,12 @@ export default function App() {
         [patternModel.exportProjectData],
     );
 
-    const loadProjectIntoApp = useCallback(
+    const schedulePendingLoad = useCallback(
         (project: BeadSchemeProject) => {
-            pendingProjectRef.current = project;
+            const imageUrl = projectImageToDataUrl(project.image);
             skipBitmapAutoFitRef.current = true;
-            imageUpload.loadFromDataUrl(projectImageToDataUrl(project.image));
+            imageUpload.loadFromDataUrl(imageUrl);
+            setPendingLoad({ project, imageUrl });
         },
         [imageUpload],
     );
@@ -51,18 +55,22 @@ export default function App() {
     useProjectAutosave({
         bitmap: imageUpload.bitmap,
         projectData: projectDataForAutosave,
-        onRestore: loadProjectIntoApp,
+        onRestore: schedulePendingLoad,
     });
 
+    // Apply a pending project load once the correct bitmap is ready.
+    // Using state (not a ref) for pendingLoad ensures the effect re-runs
+    // even when the image URL hasn't changed (same image, different project data).
     useEffect(() => {
-        const pending = pendingProjectRef.current;
-        if (!pending || !imageUpload.bitmap) return;
+        if (!pendingLoad || !imageUpload.bitmap) return;
+        if (imageUpload.bitmapUrl !== pendingLoad.imageUrl) return;
 
-        pendingProjectRef.current = null;
-        patternModel.loadProject(pending);
+        setPendingLoad(null);
+        patternModel.loadProject(pendingLoad.project);
         setPreviewAutoFitKey((key) => key + 1);
-    }, [imageUpload.bitmap, patternModel]);
+    }, [pendingLoad, imageUpload.bitmap, imageUpload.bitmapUrl, patternModel]);
 
+    // Auto-fit zoom when a new image is uploaded (not when loading a saved project).
     useEffect(() => {
         if (!imageUpload.bitmap) return;
 
@@ -98,9 +106,8 @@ export default function App() {
 
             try {
                 const project = await readProjectFile(file);
-                loadProjectIntoApp(project);
+                schedulePendingLoad(project);
             } catch (error) {
-                pendingProjectRef.current = null;
                 const message =
                     error instanceof Error
                         ? error.message
@@ -108,7 +115,7 @@ export default function App() {
                 window.alert(message);
             }
         },
-        [loadProjectIntoApp],
+        [schedulePendingLoad],
     );
 
     const handleExportConfirm = useCallback(
