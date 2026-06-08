@@ -205,6 +205,58 @@ export type PaintBrickCellsOptions = {
     strokeWidth?: number;
 };
 
+export function paintBrickCell(
+    ctx: CanvasRenderingContext2D,
+    cell: BrickCell,
+    palette: RGB[],
+    metrics: BrickLayoutMetrics,
+    options: PaintBrickCellsOptions = {},
+): void {
+    if (cell.paletteIndex < 0) return;
+
+    const { labelPaletteIndices = false, strokeWidth } = options;
+    const { radius } = metrics;
+    const lineWidth = strokeWidth ?? Math.max(0.5, metrics.cs * 0.35 * 0.73);
+    const color = palette[cell.paletteIndex];
+    const { cx, cy } = getBrickCellCenter(cell, metrics);
+
+    ctx.fillStyle = rgbToCss(color);
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+
+    if (labelPaletteIndices) {
+        const fontSize = Math.max(8, radius * 1.05);
+        ctx.fillStyle = contrastingTextColor(color);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+        ctx.fillText(String(cell.paletteIndex + 1), cx, cy);
+    }
+}
+
+export function clearBrickCellAt(
+    ctx: CanvasRenderingContext2D,
+    cell: BrickCell,
+    metrics: BrickLayoutMetrics,
+    canvasBackground: CanvasBackground,
+    canvasWidth: number,
+    canvasHeight: number,
+): void {
+    const { cx, cy } = getBrickCellCenter(cell, metrics);
+    const { radius } = metrics;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.clip();
+    drawCanvasBackground(ctx, 0, 0, canvasWidth, canvasHeight, canvasBackground);
+    ctx.restore();
+}
+
 export function paintBrickCells(
     ctx: CanvasRenderingContext2D,
     cells: BrickCell[],
@@ -212,31 +264,71 @@ export function paintBrickCells(
     metrics: BrickLayoutMetrics,
     options: PaintBrickCellsOptions = {},
 ): void {
-    const { labelPaletteIndices = false, strokeWidth } = options;
-    const { radius } = metrics;
-    const lineWidth = strokeWidth ?? Math.max(0.5, metrics.cs * 0.35 * 0.73);
-
     for (const cell of cells) {
-        if (cell.paletteIndex < 0) continue;
+        paintBrickCell(ctx, cell, palette, metrics, options);
+    }
+}
 
-        const color = palette[cell.paletteIndex];
-        const { cx, cy } = getBrickCellCenter(cell, metrics);
+export type BrickCellPaletteChange = {
+    cell: BrickCell;
+    prevPaletteIndex: number;
+};
 
-        ctx.fillStyle = rgbToCss(color);
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(0,0,0,0.2)";
-        ctx.lineWidth = lineWidth;
-        ctx.stroke();
+export function findChangedBrickCells(
+    prevCells: BrickCell[],
+    nextCells: BrickCell[],
+): BrickCellPaletteChange[] {
+    const prevIndexByKey = new Map<string, number>();
 
-        if (labelPaletteIndices) {
-            const fontSize = Math.max(8, radius * 1.05);
-            ctx.fillStyle = contrastingTextColor(color);
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
-            ctx.fillText(String(cell.paletteIndex + 1), cx, cy);
+    for (const cell of prevCells) {
+        prevIndexByKey.set(`${cell.row},${cell.col}`, cell.paletteIndex);
+    }
+
+    const changes: BrickCellPaletteChange[] = [];
+
+    for (const cell of nextCells) {
+        const key = `${cell.row},${cell.col}`;
+        const prevPaletteIndex = prevIndexByKey.get(key);
+
+        if (prevPaletteIndex === undefined) {
+            if (cell.paletteIndex >= 0) {
+                changes.push({ cell, prevPaletteIndex: -1 });
+            }
+            continue;
+        }
+
+        if (prevPaletteIndex !== cell.paletteIndex) {
+            changes.push({ cell, prevPaletteIndex });
+        }
+
+        prevIndexByKey.delete(key);
+    }
+
+    return changes;
+}
+
+export function applyBrickCellChanges(
+    ctx: CanvasRenderingContext2D,
+    changes: BrickCellPaletteChange[],
+    palette: RGB[],
+    metrics: BrickLayoutMetrics,
+    canvasBackground: CanvasBackground,
+    canvasWidth: number,
+    canvasHeight: number,
+    options: PaintBrickCellsOptions = {},
+): void {
+    for (const { cell } of changes) {
+        if (cell.paletteIndex < 0) {
+            clearBrickCellAt(
+                ctx,
+                cell,
+                metrics,
+                canvasBackground,
+                canvasWidth,
+                canvasHeight,
+            );
+        } else {
+            paintBrickCell(ctx, cell, palette, metrics, options);
         }
     }
 }

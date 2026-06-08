@@ -13,6 +13,9 @@ import {
 } from "../../features/preview/previewZoom";
 import { floodFillChanges } from "../../features/pattern/floodFill";
 import {
+    applyBrickCellChanges,
+    computeBrickLayout,
+    findChangedBrickCells,
     getCanvasPointerCoords,
     hitTestBrickCell,
     paintBrickPreview,
@@ -456,6 +459,16 @@ export function PatternPreview({
         return () => wrap.removeEventListener("wheel", onWheel);
     }, [bitmap, onPreviewZoomChange]);
 
+    const paintSnapshotRef = useRef<{
+        layoutKey: string;
+        paletteKey: string;
+        cells: BrickCell[];
+    }>({
+        layoutKey: "",
+        paletteKey: "",
+        cells: [],
+    });
+
     useEffect(() => {
         const canvas = patternCanvasRef.current;
         if (!canvas || !bitmap) return;
@@ -472,7 +485,95 @@ export function PatternPreview({
             schemeSize: schemeSizeBeads,
         };
 
-        paintBrickPreview(ctx, cells, cellSizePx, patternPalette, options);
+        const metrics = computeBrickLayout(
+            cells,
+            cellSizePx,
+            previewZoom,
+            PREVIEW_PAD,
+            gridLayout,
+            schemeSizeBeads,
+        );
+        const canvasWidth = Math.max(1, Math.ceil(metrics.canvasWidth));
+        const canvasHeight = Math.max(1, Math.ceil(metrics.canvasHeight));
+        const layoutKey = [
+            bitmap.width,
+            bitmap.height,
+            cellSizePx,
+            previewZoom,
+            gridLayout,
+            canvasBackground,
+            labelPaletteIndices,
+            schemeSizeBeads.width,
+            schemeSizeBeads.height,
+            canvasWidth,
+            canvasHeight,
+        ].join(":");
+        const paletteKey = patternPalette
+            .map((color) => `${color.r},${color.g},${color.b}`)
+            .join("|");
+
+        const snapshot = paintSnapshotRef.current;
+        const needsFullRepaint =
+            snapshot.layoutKey !== layoutKey ||
+            snapshot.paletteKey !== paletteKey ||
+            snapshot.cells.length === 0 ||
+            canvas.width !== canvasWidth ||
+            canvas.height !== canvasHeight;
+
+        if (needsFullRepaint) {
+            paintBrickPreview(
+                ctx,
+                cells,
+                cellSizePx,
+                patternPalette,
+                options,
+            );
+            paintSnapshotRef.current = {
+                layoutKey,
+                paletteKey,
+                cells,
+            };
+            return;
+        }
+
+        const changes = findChangedBrickCells(snapshot.cells, cells);
+
+        if (changes.length === 0) {
+            paintSnapshotRef.current = { layoutKey, paletteKey, cells };
+            return;
+        }
+
+        const incrementalLimit = Math.min(
+            2048,
+            Math.ceil(snapshot.cells.length * 0.2),
+        );
+
+        if (changes.length > incrementalLimit) {
+            paintBrickPreview(
+                ctx,
+                cells,
+                cellSizePx,
+                patternPalette,
+                options,
+            );
+            paintSnapshotRef.current = { layoutKey, paletteKey, cells };
+            return;
+        }
+
+        applyBrickCellChanges(
+            ctx,
+            changes,
+            patternPalette,
+            metrics,
+            canvasBackground,
+            canvasWidth,
+            canvasHeight,
+            {
+                labelPaletteIndices,
+                strokeWidth: Math.max(0.5, previewZoom * 0.35),
+            },
+        );
+        paintSnapshotRef.current = { layoutKey, paletteKey, cells };
     }, [
         bitmap,
         cells,
