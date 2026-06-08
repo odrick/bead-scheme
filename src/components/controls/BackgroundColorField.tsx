@@ -125,7 +125,12 @@ export function BackgroundColorField({
 
     return (
         <div className="color-field-row">
-            <input ref={inputRef} type="color" value={draftHex} />
+            <input
+                ref={inputRef}
+                type="color"
+                value={draftHex}
+                onChange={(event) => applyDraft(event.target.value)}
+            />
             <button
                 type="button"
                 className="eyedropper-button"
