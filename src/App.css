@@ -678,6 +678,15 @@ input[type="range"]::-moz-range-thumb {
     background: rgba(255, 255, 255, 0.05);
 }
 
+.pattern-tool-btn--text {
+    width: auto;
+    gap: 0.4rem;
+    padding: 0 0.7rem;
+    font: inherit;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
 .pattern-color-combobox {
     position: relative;
 }

@@ -213,6 +213,28 @@ function RedoIcon() {
     );
 }
 
+function FitToWindowIcon() {
+    return (
+        <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+        >
+            <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+            <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+            <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+            <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+            <rect x="8" y="8" width="8" height="8" rx="1" />
+        </svg>
+    );
+}
+
 function RestoreColorIcon() {
     return (
         <svg
@@ -498,9 +520,7 @@ export function PatternPreview({
 
     const lastAutoFitKeyRef = useRef(0);
 
-    useEffect(() => {
-        if (autoFitZoomKey === 0) return;
-        if (autoFitZoomKey === lastAutoFitKeyRef.current) return;
+    const fitPreviewToWindow = useCallback(() => {
         if (!bitmap || cells.length === 0) return;
         if (schemeSizeBeads.width <= 0 || schemeSizeBeads.height <= 0) return;
 
@@ -523,9 +543,7 @@ export function PatternPreview({
         );
         wrap.scrollLeft = 0;
         wrap.scrollTop = 0;
-        lastAutoFitKeyRef.current = autoFitZoomKey;
     }, [
-        autoFitZoomKey,
         bitmap,
         cells,
         cellSizePx,
@@ -533,6 +551,14 @@ export function PatternPreview({
         schemeSizeBeads,
         onPreviewZoomChange,
     ]);
+
+    useEffect(() => {
+        if (autoFitZoomKey === 0) return;
+        if (autoFitZoomKey === lastAutoFitKeyRef.current) return;
+
+        fitPreviewToWindow();
+        lastAutoFitKeyRef.current = autoFitZoomKey;
+    }, [autoFitZoomKey, fitPreviewToWindow]);
 
     useEffect(() => {
         setPaintSelection((selection) => {
@@ -963,6 +989,14 @@ export function PatternPreview({
                         minSchemeSize={minSchemeSizeBeads}
                         onChange={onSchemeSizeChange}
                     />
+
+                    <button
+                        type="button"
+                        className="pattern-tool-btn pattern-tool-btn--text"
+                        title="Вписати в вікно"
+                        aria-label="Вписати в вікно"
+                        onClick={fitPreviewToWindow}
+                    ><FitToWindowIcon /></button>
                 </div>
             )}
 
