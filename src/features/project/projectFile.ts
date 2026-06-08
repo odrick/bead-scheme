@@ -9,6 +9,10 @@ import type {
 } from "../pattern/cellEditHistory";
 import type { SchemeSizeBeads } from "../pattern/schemeGrid";
 import type { CanvasBackground } from "../preview/canvasUtils";
+import {
+    parseWeavingCurtains,
+    type WeavingCurtains,
+} from "../preview/weavingCurtains";
 import { isMaskKind } from "../mask/maskAssets";
 import {
     defaultMaskSettings,
@@ -41,6 +45,7 @@ export type BeadSchemeProject = {
         schemeSize: SchemeSizeBeads;
         mask?: ImageMaskSettings;
         sourceTransform?: SourceTransform;
+        weavingCurtains?: WeavingCurtains;
     };
     paletteColors: Record<string, RGB>;
     cellEdits: Record<string, number>;
@@ -324,6 +329,7 @@ export function parseProjectFile(text: string): BeadSchemeProject {
             },
             mask: parseMaskSettings(settings.mask),
             sourceTransform: parseSourceTransform(settings.sourceTransform),
+            weavingCurtains: parseWeavingCurtains(settings.weavingCurtains),
         },
         paletteColors: parsePaletteColors(parsed.paletteColors),
         cellEdits: parseCellEdits(parsed.cellEdits),

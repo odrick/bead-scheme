@@ -259,6 +259,10 @@ export default function App() {
                         schemeSizeBeads={patternModel.schemeSizeBeads}
                         minSchemeSizeBeads={patternModel.imageGridSizeBeads}
                         onSchemeSizeChange={patternModel.setSchemeSizeBeads}
+                        weavingCurtains={patternModel.weavingCurtains}
+                        onWeavingCurtainsChange={
+                            patternModel.setWeavingCurtains
+                        }
                     />
                 </div>
 

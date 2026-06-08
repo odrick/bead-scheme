@@ -1,6 +1,7 @@
 import {
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
     type Dispatch,
@@ -36,6 +37,8 @@ import {
     type PaintBrickPreviewOptions,
     type SchemeSizeBeads,
 } from "../../features/preview/canvasUtils";
+import type { WeavingCurtains } from "../../features/preview/weavingCurtains";
+import { WeavingCurtainsOverlay } from "./WeavingCurtainsOverlay";
 
 type EditTool = "pan" | "pencil" | "eraser" | "fill";
 type SchemeMode = "editing" | "weaving";
@@ -99,6 +102,8 @@ type PatternPreviewProps = {
     schemeSizeBeads: { width: number; height: number };
     minSchemeSizeBeads: { width: number; height: number };
     onSchemeSizeChange: (width: number, height: number) => void;
+    weavingCurtains: WeavingCurtains;
+    onWeavingCurtainsChange: Dispatch<SetStateAction<WeavingCurtains>>;
 };
 
 const PREVIEW_PAD = 6;
@@ -751,6 +756,8 @@ export function PatternPreview({
     schemeSizeBeads,
     minSchemeSizeBeads,
     onSchemeSizeChange,
+    weavingCurtains,
+    onWeavingCurtainsChange,
 }: PatternPreviewProps) {
     const patternCanvasRef = useRef<HTMLCanvasElement>(null);
     const patternWrapRef = useRef<HTMLDivElement>(null);
@@ -1221,6 +1228,53 @@ export function PatternPreview({
         event.preventDefault();
     };
 
+    const layoutMetrics = useMemo(
+        () =>
+            computeBrickLayout(
+                cells,
+                cellSizePx,
+                previewZoom,
+                PREVIEW_PAD,
+                gridLayout,
+                schemeSizeBeads,
+            ),
+        [
+            cells,
+            cellSizePx,
+            previewZoom,
+            gridLayout,
+            schemeSizeBeads,
+        ],
+    );
+
+    const canvasLayoutSize = useMemo(
+        () => ({
+            width: Math.max(1, Math.ceil(layoutMetrics.canvasWidth)),
+            height: Math.max(1, Math.ceil(layoutMetrics.canvasHeight)),
+        }),
+        [layoutMetrics.canvasWidth, layoutMetrics.canvasHeight],
+    );
+
+    const setLeftCurtainBeads = useCallback(
+        (leftBeads: number) => {
+            onWeavingCurtainsChange((current) => ({
+                ...current,
+                leftBeads,
+            }));
+        },
+        [onWeavingCurtainsChange],
+    );
+
+    const setTopCurtainBeads = useCallback(
+        (topBeads: number) => {
+            onWeavingCurtainsChange((current) => ({
+                ...current,
+                topBeads,
+            }));
+        },
+        [onWeavingCurtainsChange],
+    );
+
     const handleCanvasMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
         if (editTool === "pan" || event.button !== 0) return;
 
@@ -1415,14 +1469,35 @@ export function PatternPreview({
 
             <div
                 ref={patternWrapRef}
-                className={`pattern-wrap pattern-wrap--${editTool}${isPanning ? " pattern-wrap--panning" : ""}`}
+                className={`pattern-wrap pattern-wrap--${editTool}${isPanning ? " pattern-wrap--panning" : ""}${schemeMode === "weaving" ? " pattern-wrap--weaving" : ""}`}
                 onMouseDown={handleWrapMouseDown}
             >
-                <canvas
-                    ref={patternCanvasRef}
-                    className="pattern"
-                    onMouseDown={handleCanvasMouseDown}
-                />
+                <div
+                    className="pattern-canvas-stack"
+                    style={{
+                        width: canvasLayoutSize.width,
+                        height: canvasLayoutSize.height,
+                    }}
+                >
+                    <canvas
+                        ref={patternCanvasRef}
+                        className="pattern"
+                        onMouseDown={handleCanvasMouseDown}
+                    />
+                    {schemeMode === "weaving" ? (
+                        <WeavingCurtainsOverlay
+                            canvasRef={patternCanvasRef}
+                            metrics={layoutMetrics}
+                            canvasWidth={canvasLayoutSize.width}
+                            canvasHeight={canvasLayoutSize.height}
+                            schemeSize={schemeSizeBeads}
+                            leftBeads={weavingCurtains.leftBeads}
+                            topBeads={weavingCurtains.topBeads}
+                            onLeftBeadsChange={setLeftCurtainBeads}
+                            onTopBeadsChange={setTopCurtainBeads}
+                        />
+                    ) : null}
+                </div>
             </div>
         </section>
     );

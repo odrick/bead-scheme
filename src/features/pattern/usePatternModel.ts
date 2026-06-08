@@ -16,6 +16,11 @@ import {
 } from "../preview/canvasUtils";
 import { clampPreviewZoom } from "../preview/previewZoom";
 import {
+    clampWeavingCurtains,
+    DEFAULT_WEAVING_CURTAINS,
+    type WeavingCurtains,
+} from "../preview/weavingCurtains";
+import {
     applyCellEditChanges,
     applyMarkChanges,
     cellKey,
@@ -177,6 +182,8 @@ type PatternModel = {
     sourceTransform: SourceTransform;
     commitSourceTransform: (transform: SourceTransform) => void;
     resetSourceTransform: () => void;
+    weavingCurtains: WeavingCurtains;
+    setWeavingCurtains: Dispatch<SetStateAction<WeavingCurtains>>;
 };
 
 type UsePatternModelOptions = {
@@ -203,6 +210,9 @@ export function usePatternModel(
     }, []);
     const [canvasBackground, setCanvasBackground] =
         useState<CanvasBackground>("checkerboard");
+    const [weavingCurtains, setWeavingCurtainsState] = useState<WeavingCurtains>(
+        () => ({ ...DEFAULT_WEAVING_CURTAINS }),
+    );
     const [paletteOverrides, setPaletteOverrides] = useState<PaletteOverrides>({
         baseKey: "",
         colors: {},
@@ -720,6 +730,23 @@ export function usePatternModel(
         [cellsBaseKey, gridLayout, imageGridSizeBeads.width, imageGridSizeBeads.height],
     );
 
+    const setWeavingCurtains = useCallback(
+        (value: SetStateAction<WeavingCurtains>) => {
+            setWeavingCurtainsState((current) => {
+                const next =
+                    typeof value === "function" ? value(current) : value;
+                return clampWeavingCurtains(next, schemeSizeBeads);
+            });
+        },
+        [schemeSizeBeads],
+    );
+
+    useEffect(() => {
+        setWeavingCurtainsState((current) =>
+            clampWeavingCurtains(current, schemeSizeBeads),
+        );
+    }, [schemeSizeBeads.width, schemeSizeBeads.height]);
+
     const setCellPaletteIndex = useCallback(
         (
             row: number,
@@ -1160,6 +1187,7 @@ export function usePatternModel(
                 schemeSize: schemeSizeBeads,
                 mask: serializeMaskSettings(maskSettings),
                 sourceTransform,
+                weavingCurtains,
             },
             paletteColors:
                 paletteOverrides.baseKey === paletteBaseKey
@@ -1200,6 +1228,7 @@ export function usePatternModel(
         markEditHistory,
         maskSettings,
         sourceTransform,
+        weavingCurtains,
     ]);
 
     const setMaskKind = useCallback(
@@ -1295,6 +1324,12 @@ export function usePatternModel(
             setLabelPaletteIndices(settings.labelPaletteIndices ?? false);
             setCanvasBackground(settings.canvasBackground);
             setSchemeSizeBeadsState(settings.schemeSize);
+            setWeavingCurtainsState(
+                clampWeavingCurtains(
+                    settings.weavingCurtains ?? DEFAULT_WEAVING_CURTAINS,
+                    settings.schemeSize,
+                ),
+            );
             skipMaskCenterRef.current = true;
             skipSourceTransformResetRef.current = true;
             setMaskSettings(settings.mask ?? defaultMaskSettings());
@@ -1384,5 +1419,7 @@ export function usePatternModel(
         sourceTransform,
         commitSourceTransform,
         resetSourceTransform,
+        weavingCurtains,
+        setWeavingCurtains,
     };
 }

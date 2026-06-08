@@ -693,6 +693,41 @@ input[type="range"]::-moz-range-thumb {
     cursor: crosshair;
 }
 
+.pattern-canvas-stack {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.weaving-curtains {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.weaving-curtain {
+    position: absolute;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.weaving-curtain-edge {
+    position: absolute;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+.weaving-curtain-edge--vertical {
+    cursor: ew-resize;
+}
+
+.weaving-curtain-edge--horizontal {
+    cursor: ns-resize;
+}
+
+.pattern-wrap--weaving .pattern-canvas-stack {
+    cursor: default;
+}
+
 .pattern-toolbar {
     display: flex;
     flex-wrap: wrap;
