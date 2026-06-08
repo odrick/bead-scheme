@@ -245,14 +245,7 @@ export function SettingsPanel({
                 value={previewZoom}
                 onCommit={onPreviewZoomChange}
                 aria-label="Масштаб перегляду схеми"
-                label={(value) => (
-                    <>
-                        Масштаб перегляду схеми:{" "}
-                        <strong>
-                            {value < 1 ? value.toFixed(2) : value.toFixed(1)}×
-                        </strong>
-                    </>
-                )}
+                label={() => "Масштаб перегляду схеми"}
             />
 
             <div className="stats">

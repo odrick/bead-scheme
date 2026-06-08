@@ -6,6 +6,7 @@ type DeferredRangeSliderBaseProps = {
     step?: number;
     value: number;
     onCommit: (value: number) => void;
+    onDraftChange?: (value: number) => void;
     "aria-label"?: string;
 };
 
@@ -29,6 +30,7 @@ export function DeferredRangeSlider({
     step,
     value,
     onCommit,
+    onDraftChange,
     "aria-label": ariaLabel,
     ...rest
 }: DeferredRangeSliderProps) {
@@ -70,6 +72,7 @@ export function DeferredRangeSlider({
 
     const updateDraft = (next: number) => {
         setDraft(next);
+        onDraftChange?.(next);
 
         if (!isInputFocusedRef.current) {
             setInputDraft(String(next));
@@ -157,6 +160,7 @@ export function DeferredRangeSlider({
 
                     isDraggingRef.current = false;
                     setDraft(value);
+                    onDraftChange?.(value);
 
                     if (!isInputFocusedRef.current) {
                         setInputDraft(String(value));

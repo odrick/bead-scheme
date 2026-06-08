@@ -36,6 +36,13 @@ import {
     mergeSchemeCells,
     type SchemeSizeBeads,
 } from "./schemeGrid";
+import { applyImageMask } from "../mask/imageMask";
+import {
+    centerMaskOnImage,
+    defaultMaskSettings,
+    type ImageMaskSettings,
+    type MaskKind,
+} from "../mask/maskTypes";
 import type { ProjectExportData } from "../project/projectFile";
 
 const DEFAULT_BG = "#ffffff";
@@ -113,9 +120,19 @@ type PatternModel = {
     baseCells: BrickCell[];
     exportProjectData: () => ProjectExportData | null;
     loadProject: (project: ProjectExportData) => void;
+    maskSettings: ImageMaskSettings;
+    setMaskKind: (kind: MaskKind) => void;
+    commitMaskSettings: (settings: ImageMaskSettings) => void;
 };
 
-export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
+type UsePatternModelOptions = {
+    maskImages: Record<Exclude<MaskKind, "none">, HTMLImageElement | null>;
+};
+
+export function usePatternModel(
+    bitmap: HTMLImageElement | null,
+    { maskImages }: UsePatternModelOptions,
+): PatternModel {
     const [paletteSize, setPaletteSize] = useState(10);
     const [beadsPerRow, setBeadsPerRow] = useState(60);
     const [gridLayout, setGridLayout] = useState<GridLayout>("brick");
@@ -156,6 +173,11 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         editHistory: { undo: CellEditChange[][]; redo: CellEditChange[][] };
     } | null>(null);
     const [restoreKey, setRestoreKey] = useState(0);
+    const [maskSettings, setMaskSettings] = useState<ImageMaskSettings>(
+        defaultMaskSettings,
+    );
+    const bitmapSizeKeyRef = useRef("");
+    const skipMaskCenterRef = useRef(false);
 
     const baseCellsRef = useRef<BrickCell[]>([]);
     const cellOverridesRef = useRef(cellOverrides);
@@ -174,8 +196,42 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         return bitmap.width / Math.max(2, beadsPerRow);
     }, [bitmap, beadsPerRow]);
 
+    const processedSource = useMemo(() => {
+        if (!bitmap || bitmap.width === 0) return null;
+
+        if (maskSettings.kind === "none") return bitmap;
+
+        const maskImage = maskImages[maskSettings.kind];
+        if (!maskImage) return bitmap;
+
+        return applyImageMask(bitmap, maskImage, maskSettings);
+    }, [bitmap, maskImages, maskSettings]);
+
+    useEffect(() => {
+        if (!bitmap) {
+            bitmapSizeKeyRef.current = "";
+            setMaskSettings(defaultMaskSettings());
+            return;
+        }
+
+        const sizeKey = `${bitmap.width}x${bitmap.height}`;
+
+        if (bitmapSizeKeyRef.current === sizeKey) return;
+
+        bitmapSizeKeyRef.current = sizeKey;
+
+        if (skipMaskCenterRef.current) {
+            skipMaskCenterRef.current = false;
+            return;
+        }
+
+        setMaskSettings((current) =>
+            centerMaskOnImage(bitmap.width, bitmap.height, current),
+        );
+    }, [bitmap]);
+
     const { palette, imageCells, imageGridBounds } = useMemo(() => {
-        if (!bitmap || bitmap.width === 0) {
+        if (!processedSource || processedSource.width === 0) {
             return {
                 palette: [] as RGB[],
                 imageCells: [] as BrickCell[],
@@ -183,7 +239,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             };
         }
 
-        const imageData = loadImageToImageData(bitmap);
+        const imageData = loadImageToImageData(processedSource);
         const backgroundFilter = {
             mode: backgroundMode,
             background: backgroundRgb,
@@ -201,7 +257,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
 
         return { palette, imageCells, imageGridBounds };
     }, [
-        bitmap,
+        processedSource,
         paletteSize,
         cellSizePx,
         backgroundRgb,
@@ -232,6 +288,10 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
                 backgroundMode,
                 backgroundHex,
                 gridLayout,
+                maskSettings.kind,
+                maskSettings.scale,
+                maskSettings.offsetX,
+                maskSettings.offsetY,
             ].join(":"),
         [
             bitmap,
@@ -240,6 +300,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             backgroundMode,
             backgroundHex,
             gridLayout,
+            maskSettings,
         ],
     );
 
@@ -277,6 +338,10 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
                 // Для ажурної розмір схеми не змінює позиції клітинок — не включаємо до ключа.
                 gridLayout !== "lace" ? schemeSizeBeads.width : 0,
                 gridLayout !== "lace" ? schemeSizeBeads.height : 0,
+                maskSettings.kind,
+                maskSettings.scale,
+                maskSettings.offsetX,
+                maskSettings.offsetY,
             ].join(":"),
         [
             bitmap,
@@ -288,6 +353,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             palette,
             schemeSizeBeads.width,
             schemeSizeBeads.height,
+            maskSettings,
         ],
     );
 
@@ -707,6 +773,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
                 labelPaletteIndices,
                 canvasBackground,
                 schemeSize: schemeSizeBeads,
+                mask: maskSettings,
             },
             paletteColors:
                 paletteOverrides.baseKey === paletteBaseKey
@@ -735,7 +802,27 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         cells,
         cellsBaseKey,
         editHistory,
+        maskSettings,
     ]);
+
+    const setMaskKind = useCallback(
+        (kind: MaskKind) => {
+            setMaskSettings((current) => {
+                const next = { ...current, kind };
+
+                if (!bitmap) return next;
+
+                if (kind === "none") return { ...next, kind: "none" };
+
+                return centerMaskOnImage(bitmap.width, bitmap.height, next);
+            });
+        },
+        [bitmap],
+    );
+
+    const commitMaskSettings = useCallback((settings: ImageMaskSettings) => {
+        setMaskSettings(settings);
+    }, []);
 
     const loadProject = useCallback(
         (project: ProjectExportData) => {
@@ -758,6 +845,9 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             setLabelPaletteIndices(settings.labelPaletteIndices ?? false);
             setCanvasBackground(settings.canvasBackground);
             setSchemeSizeBeadsState(settings.schemeSize);
+            skipMaskCenterRef.current = true;
+            setMaskSettings(settings.mask ?? defaultMaskSettings());
+            bitmapSizeKeyRef.current = `${bitmap?.width ?? 0}x${bitmap?.height ?? 0}`;
             // Force the restore effect to run even if all other deps are unchanged
             // (e.g. same image + same settings but different cell edits/palette).
             setRestoreKey((k) => k + 1);
@@ -770,6 +860,10 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
                 settings.backgroundMode,
                 settings.backgroundHex,
                 settings.gridLayout,
+                settings.mask?.kind ?? "none",
+                settings.mask?.scale ?? 1,
+                settings.mask?.offsetX ?? 0,
+                settings.mask?.offsetY ?? 0,
             ].join(":");
         },
         [bitmap, setPreviewZoom],
@@ -817,5 +911,8 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         baseCells,
         exportProjectData,
         loadProject,
+        maskSettings,
+        setMaskKind,
+        commitMaskSettings,
     };
 }

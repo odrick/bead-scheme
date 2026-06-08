@@ -549,6 +549,50 @@ input[type="range"]::-moz-range-thumb {
     box-shadow: 0 10px 22px rgba(0, 0, 0, 0.32);
 }
 
+.thumb--mask-active {
+    cursor: grab;
+}
+
+.thumb--mask-active:active {
+    cursor: grabbing;
+}
+
+.original-preview-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.original-mask-controls {
+    flex-shrink: 0;
+    margin-top: 0.65rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.original-mask-controls .field {
+    margin-bottom: 0.75rem;
+}
+
+.original-mask-controls .hint {
+    margin: 0;
+}
+
+.mask-select {
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    background: var(--card-strong);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    color: rgba(255, 255, 255, 0.88);
+    font: inherit;
+}
+
+.mask-select:focus-visible {
+    outline: 2px solid rgba(125, 211, 252, 0.55);
+    outline-offset: 2px;
+}
+
 .pattern-wrap {
     overflow: auto;
     width: 100%;

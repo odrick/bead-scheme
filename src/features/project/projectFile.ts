@@ -6,6 +6,8 @@ import type {
 import type { CellEditChange } from "../pattern/cellEditHistory";
 import type { SchemeSizeBeads } from "../pattern/schemeGrid";
 import type { CanvasBackground } from "../preview/canvasUtils";
+import { isMaskKind } from "../mask/maskAssets";
+import { defaultMaskSettings, type ImageMaskSettings } from "../mask/maskTypes";
 
 export const PROJECT_FORMAT_VERSION = 1;
 export const PROJECT_FILE_EXTENSION = "bsp";
@@ -26,6 +28,7 @@ export type BeadSchemeProject = {
         labelPaletteIndices?: boolean;
         canvasBackground: CanvasBackground;
         schemeSize: SchemeSizeBeads;
+        mask?: ImageMaskSettings;
     };
     paletteColors: Record<string, RGB>;
     cellEdits: Record<string, number>;
@@ -125,6 +128,27 @@ function parseCellEdits(value: unknown): Record<string, number> {
     return result;
 }
 
+function parseMaskSettings(value: unknown): ImageMaskSettings {
+    if (!isRecord(value)) return defaultMaskSettings();
+
+    const kind = value.kind;
+    const scale = value.scale;
+    const offsetX = value.offsetX;
+    const offsetY = value.offsetY;
+
+    if (
+        typeof kind !== "string" ||
+        !isMaskKind(kind) ||
+        typeof scale !== "number" ||
+        typeof offsetX !== "number" ||
+        typeof offsetY !== "number"
+    ) {
+        return defaultMaskSettings();
+    }
+
+    return { kind, scale, offsetX, offsetY };
+}
+
 function parseEditHistory(value: unknown): BeadSchemeProject["editHistory"] {
     if (!isRecord(value)) {
         return { undo: [], redo: [] };
@@ -222,6 +246,7 @@ export function parseProjectFile(text: string): BeadSchemeProject {
                 width: schemeSize.width,
                 height: schemeSize.height,
             },
+            mask: parseMaskSettings(settings.mask),
         },
         paletteColors: parsePaletteColors(parsed.paletteColors),
         cellEdits: parseCellEdits(parsed.cellEdits),

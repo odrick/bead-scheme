@@ -22,11 +22,13 @@ import {
     readProjectFile,
     type BeadSchemeProject,
 } from "./features/project/projectFile";
+import { useMaskImages } from "./features/mask/useMaskImages";
 import { useProjectAutosave } from "./features/project/useProjectAutosave";
 
 export default function App() {
     const imageUpload = useImageUpload();
-    const patternModel = usePatternModel(imageUpload.bitmap);
+    const maskImages = useMaskImages();
+    const patternModel = usePatternModel(imageUpload.bitmap, { maskImages });
     const { isRendering, commitWithRendering } = usePatternRenderCommit();
     const [exportDialogOpen, setExportDialogOpen] = useState(false);
     const [previewAutoFitKey, setPreviewAutoFitKey] = useState(0);
@@ -201,6 +203,18 @@ export default function App() {
 
                     <OriginalImagePreview
                         bitmap={imageUpload.bitmap}
+                        maskImages={maskImages}
+                        maskSettings={patternModel.maskSettings}
+                        onMaskKindChange={(kind) =>
+                            commitWithRendering(() =>
+                                patternModel.setMaskKind(kind),
+                            )
+                        }
+                        onMaskCommit={(settings) =>
+                            commitWithRendering(() =>
+                                patternModel.commitMaskSettings(settings),
+                            )
+                        }
                         isDragOver={imageUpload.isOriginalDragOver}
                         onDragOver={imageUpload.onOriginalDragOver}
                         onDragLeave={imageUpload.onOriginalDragLeave}
