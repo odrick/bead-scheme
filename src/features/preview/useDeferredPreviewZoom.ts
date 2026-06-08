@@ -10,15 +10,23 @@ import {
     PREVIEW_ZOOM_APPLY_INTERVAL_MS,
 } from "./previewZoom";
 
+export type PreviewZoomAppliedListener = (
+    fromZoom: number,
+    toZoom: number,
+) => void;
+
 export function useDeferredPreviewZoom(
     previewZoom: number,
     onPreviewZoomChange: Dispatch<SetStateAction<number>>,
+    onZoomApplied?: PreviewZoomAppliedListener,
 ) {
     const appliedRef = useRef(previewZoom);
     const pendingRef = useRef(previewZoom);
     const dirtyRef = useRef(false);
     const onChangeRef = useRef(onPreviewZoomChange);
     onChangeRef.current = onPreviewZoomChange;
+    const onZoomAppliedRef = useRef(onZoomApplied);
+    onZoomAppliedRef.current = onZoomApplied;
 
     useEffect(() => {
         appliedRef.current = previewZoom;
@@ -34,10 +42,12 @@ export function useDeferredPreviewZoom(
         const next = clampPreviewZoom(pendingRef.current);
         pendingRef.current = next;
 
-        if (next === appliedRef.current) return;
+        const from = appliedRef.current;
+        if (next === from) return;
 
         appliedRef.current = next;
         onChangeRef.current(next);
+        onZoomAppliedRef.current?.(from, next);
     }, []);
 
     useEffect(() => {
@@ -49,9 +59,12 @@ export function useDeferredPreviewZoom(
         return () => {
             window.clearInterval(id);
             if (dirtyRef.current) {
+                const from = appliedRef.current;
                 const next = clampPreviewZoom(pendingRef.current);
-                if (next !== appliedRef.current) {
+                if (next !== from) {
+                    appliedRef.current = next;
                     onChangeRef.current(next);
+                    onZoomAppliedRef.current?.(from, next);
                 }
             }
         };

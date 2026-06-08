@@ -1,6 +1,7 @@
 import {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -11,9 +12,12 @@ import { rgbToCss, type BrickCell, type GridLayout, type RGB } from "../../beadM
 import { DeferredRangeSlider } from "../controls/DeferredRangeSlider";
 import {
     computeFitPreviewZoom,
+    adjustPreviewScrollForZoomAtPointer,
     PREVIEW_ZOOM_MAX,
     PREVIEW_ZOOM_MIN,
+    applyPreviewZoomWheelStep,
     PREVIEW_ZOOM_STEP,
+    type PreviewZoomScrollAnchor,
 } from "../../features/preview/previewZoom";
 import { useDeferredPreviewZoom } from "../../features/preview/useDeferredPreviewZoom";
 import {
@@ -790,6 +794,8 @@ export function PatternPreview({
     const onRedo = schemeMode === "weaving" ? onRedoMarkEdit : onRedoCellEdit;
 
     const lastAutoFitKeyRef = useRef(0);
+    const wheelZoomAnchorRef = useRef<PreviewZoomScrollAnchor | null>(null);
+    const prevZoomForScrollRef = useRef(previewZoom);
 
     const {
         requestPreviewZoom,
@@ -807,6 +813,7 @@ export function PatternPreview({
         const { clientWidth, clientHeight } = wrap;
         if (clientWidth <= 0 || clientHeight <= 0) return;
 
+        wheelZoomAnchorRef.current = null;
         applyPreviewZoomNow(
             computeFitPreviewZoom(
                 cells,
@@ -882,8 +889,12 @@ export function PatternPreview({
             event.preventDefault();
             const direction = event.deltaY < 0 ? 1 : -1;
 
-            requestPreviewZoom(
-                (zoom) => zoom + direction * PREVIEW_ZOOM_STEP,
+            wheelZoomAnchorRef.current = {
+                clientX: event.clientX,
+                clientY: event.clientY,
+            };
+            requestPreviewZoom((zoom) =>
+                applyPreviewZoomWheelStep(zoom, direction > 0 ? 1 : -1),
             );
         };
 
@@ -900,13 +911,49 @@ export function PatternPreview({
         paletteKey: "",
         cells: [],
     });
+    const prevSchemeModeRef = useRef(schemeMode);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
+        const syncScrollAfterZoom = () => {
+            const anchor = wheelZoomAnchorRef.current;
+            const wrap = patternWrapRef.current;
+            const oldZoom = prevZoomForScrollRef.current;
+
+            if (anchor && wrap && oldZoom !== previewZoom) {
+                adjustPreviewScrollForZoomAtPointer(
+                    wrap,
+                    anchor,
+                    oldZoom,
+                    previewZoom,
+                    PREVIEW_PAD,
+                );
+            }
+
+            prevZoomForScrollRef.current = previewZoom;
+        };
+
         const canvas = patternCanvasRef.current;
-        if (!canvas || !bitmap) return;
+        if (!canvas || !bitmap) {
+            syncScrollAfterZoom();
+            return;
+        }
 
         const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+        if (!ctx) {
+            syncScrollAfterZoom();
+            return;
+        }
+
+        const schemeModeChanged = prevSchemeModeRef.current !== schemeMode;
+        if (schemeModeChanged) {
+            prevSchemeModeRef.current = schemeMode;
+            paintSnapshotRef.current = {
+                layoutKey: "",
+                paletteKey: "",
+                cells: [],
+            };
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
 
         const options: PaintBrickPreviewOptions = {
             zoom: previewZoom,
@@ -928,6 +975,7 @@ export function PatternPreview({
         const canvasWidth = Math.max(1, Math.ceil(metrics.canvasWidth));
         const canvasHeight = Math.max(1, Math.ceil(metrics.canvasHeight));
         const layoutKey = [
+            schemeMode,
             bitmap.width,
             bitmap.height,
             cellSizePx,
@@ -946,6 +994,7 @@ export function PatternPreview({
 
         const snapshot = paintSnapshotRef.current;
         const needsFullRepaint =
+            schemeModeChanged ||
             snapshot.layoutKey !== layoutKey ||
             snapshot.paletteKey !== paletteKey ||
             snapshot.cells.length === 0 ||
@@ -965,6 +1014,7 @@ export function PatternPreview({
                 paletteKey,
                 cells: displayCells,
             };
+            syncScrollAfterZoom();
             return;
         }
 
@@ -976,6 +1026,7 @@ export function PatternPreview({
                 paletteKey,
                 cells: displayCells,
             };
+            syncScrollAfterZoom();
             return;
         }
 
@@ -997,6 +1048,7 @@ export function PatternPreview({
                 paletteKey,
                 cells: displayCells,
             };
+            syncScrollAfterZoom();
             return;
         }
 
@@ -1018,6 +1070,8 @@ export function PatternPreview({
             paletteKey,
             cells: displayCells,
         };
+
+        syncScrollAfterZoom();
     }, [
         bitmap,
         displayCells,
@@ -1028,6 +1082,7 @@ export function PatternPreview({
         gridLayout,
         canvasBackground,
         schemeSizeBeads,
+        schemeMode,
     ]);
 
     const applyToolAt = useCallback(
@@ -1448,8 +1503,12 @@ export function PatternPreview({
                             max={PREVIEW_ZOOM_MAX}
                             step={PREVIEW_ZOOM_STEP}
                             value={previewZoom}
-                            onDraftChange={requestPreviewZoom}
+                            onDraftChange={(value) => {
+                                wheelZoomAnchorRef.current = null;
+                                requestPreviewZoom(value);
+                            }}
                             onCommit={(value) => {
+                                wheelZoomAnchorRef.current = null;
                                 requestPreviewZoom(value);
                                 commitPreviewZoom();
                             }}
