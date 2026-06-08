@@ -216,6 +216,8 @@ export default function App() {
                         }
                         onCellEditStrokeEnd={patternModel.endCellEditStroke}
                         onCellEditBatch={patternModel.applyCellEditBatch}
+                        onRestoreCell={patternModel.restoreCellAt}
+                        baseCells={patternModel.baseCells}
                         onUndoCellEdit={patternModel.undoCellEdit}
                         onRedoCellEdit={patternModel.redoCellEdit}
                         canUndoCellEdit={patternModel.canUndoCellEdit}

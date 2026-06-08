@@ -669,6 +669,23 @@ input[type="range"]::-moz-range-thumb {
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
+.pattern-color-block--restore,
+.pattern-color-block--mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pattern-color-block--restore {
+    background: #111111;
+    color: rgba(248, 250, 252, 0.92);
+}
+
+.pattern-color-block--mark {
+    background: #111111;
+    color: #f59e0b;
+}
+
 .pattern-color-menu {
     position: absolute;
     top: calc(100% + 0.35rem);
@@ -712,6 +729,29 @@ input[type="range"]::-moz-range-thumb {
     box-shadow:
         inset 0 0 0 1px rgba(0, 0, 0, 0.08),
         0 0 0 2px rgba(125, 211, 252, 0.35);
+}
+
+.pattern-color-menu-divider {
+    height: 1px;
+    margin: 0.15rem 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.pattern-color-option--restore,
+.pattern-color-option--mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pattern-color-option--restore {
+    background: #111111;
+    color: rgba(248, 250, 252, 0.92);
+}
+
+.pattern-color-option--mark {
+    background: #111111;
+    color: #f59e0b;
 }
 
 .pattern-scheme-size {

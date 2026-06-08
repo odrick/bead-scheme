@@ -18,8 +18,11 @@ import { clampPreviewZoom } from "../preview/previewZoom";
 import {
     applyCellEditChanges,
     cellKey,
+    EMPTY_PALETTE_INDEX,
     getBasePaletteIndex,
     getEffectivePaletteIndex,
+    isSchemeBeadIndex,
+    MARKED_PALETTE_INDEX,
     MAX_CELL_EDIT_HISTORY,
     setOverrideValue,
     type CellEditChange,
@@ -101,6 +104,12 @@ type PatternModel = {
     schemeSizeBeads: SchemeSizeBeads;
     imageGridSizeBeads: SchemeSizeBeads;
     setSchemeSizeBeads: (width: number, height: number) => void;
+    restoreCellAt: (
+        row: number,
+        col: number,
+        options?: SetCellPaletteIndexOptions,
+    ) => void;
+    baseCells: BrickCell[];
     exportProjectData: () => ProjectExportData | null;
     loadProject: (project: ProjectExportData) => void;
 };
@@ -467,6 +476,13 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
 
             if (currentEffective === paletteIndex) return;
 
+            if (
+                paletteIndex === MARKED_PALETTE_INDEX &&
+                currentEffective === EMPTY_PALETTE_INDEX
+            ) {
+                return;
+            }
+
             if (options?.stroke) {
                 const pending = pendingStrokeRef.current;
                 const existing = pending.get(key);
@@ -504,6 +520,22 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             });
         },
         [cellsBaseKey],
+    );
+
+    const restoreCellAt = useCallback(
+        (
+            row: number,
+            col: number,
+            options?: SetCellPaletteIndexOptions,
+        ) => {
+            const baseIndex = getBasePaletteIndex(
+                baseCellsRef.current,
+                row,
+                col,
+            );
+            setCellPaletteIndex(row, col, baseIndex, options);
+        },
+        [setCellPaletteIndex],
     );
 
     const endCellEditStroke = useCallback(() => {
@@ -643,12 +675,13 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         editHistory.baseKey === cellsBaseKey && editHistory.redo.length > 0;
 
     const hasPattern = useMemo(
-        () => cells.some((cell) => cell.paletteIndex >= 0),
+        () => cells.some((cell) => isSchemeBeadIndex(cell.paletteIndex)),
         [cells],
     );
 
     const beadCount = useMemo(
-        () => cells.filter((cell) => cell.paletteIndex >= 0).length,
+        () =>
+            cells.filter((cell) => isSchemeBeadIndex(cell.paletteIndex)).length,
         [cells],
     );
 
@@ -777,6 +810,8 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         schemeSizeBeads,
         imageGridSizeBeads,
         setSchemeSizeBeads,
+        restoreCellAt,
+        baseCells,
         exportProjectData,
         loadProject,
     };

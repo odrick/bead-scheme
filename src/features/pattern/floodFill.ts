@@ -1,5 +1,10 @@
 import { type BrickCell, type GridLayout } from "../../beadMath";
-import { type CellEditChange, cellKey } from "./cellEditHistory";
+import {
+    EMPTY_PALETTE_INDEX,
+    getBasePaletteIndex,
+    type CellEditChange,
+    cellKey,
+} from "./cellEditHistory";
 import type { SchemeSizeBeads } from "./schemeGrid";
 
 export type GridCoord = {
@@ -85,14 +90,13 @@ export function floodFillRegion(
     layout: GridLayout,
     startRow: number,
     startCol: number,
-    targetIndex: number,
 ): GridCoord[] {
     const lookup = buildPaletteIndexLookup(cells);
 
     const startKey = cellKey(startRow, startCol);
-    const sourceIndex = lookup.get(startKey) ?? -1;
+    const sourceIndex = lookup.get(startKey) ?? EMPTY_PALETTE_INDEX;
 
-    if (sourceIndex < 0 || sourceIndex === targetIndex) {
+    if (sourceIndex === EMPTY_PALETTE_INDEX) {
         return [];
     }
 
@@ -134,6 +138,15 @@ export function floodFillChanges(
     targetIndex: number,
 ): CellEditChange[] {
     const lookup = buildPaletteIndexLookup(cells);
+    const startKey = cellKey(startRow, startCol);
+    const sourceIndex = lookup.get(startKey) ?? EMPTY_PALETTE_INDEX;
+
+    if (
+        sourceIndex === EMPTY_PALETTE_INDEX ||
+        sourceIndex === targetIndex
+    ) {
+        return [];
+    }
 
     const region = floodFillRegion(
         cells,
@@ -141,15 +154,51 @@ export function floodFillChanges(
         layout,
         startRow,
         startCol,
-        targetIndex,
     );
 
     const changes: CellEditChange[] = [];
 
     for (const { row, col } of region) {
-        const from = lookup.get(cellKey(row, col)) ?? -1;
+        const from = lookup.get(cellKey(row, col)) ?? EMPTY_PALETTE_INDEX;
         if (from === targetIndex) continue;
         changes.push({ row, col, from, to: targetIndex });
+    }
+
+    return changes;
+}
+
+export function floodFillRestoreChanges(
+    cells: BrickCell[],
+    baseCells: BrickCell[],
+    schemeSize: SchemeSizeBeads | undefined,
+    layout: GridLayout,
+    startRow: number,
+    startCol: number,
+): CellEditChange[] {
+    const lookup = buildPaletteIndexLookup(cells);
+    const startKey = cellKey(startRow, startCol);
+    const sourceIndex = lookup.get(startKey) ?? EMPTY_PALETTE_INDEX;
+
+    if (sourceIndex === EMPTY_PALETTE_INDEX) {
+        return [];
+    }
+
+    const region = floodFillRegion(
+        cells,
+        schemeSize,
+        layout,
+        startRow,
+        startCol,
+    );
+
+    const changes: CellEditChange[] = [];
+
+    for (const { row, col } of region) {
+        const from = lookup.get(cellKey(row, col)) ?? EMPTY_PALETTE_INDEX;
+        const to = getBasePaletteIndex(baseCells, row, col);
+
+        if (from === to) continue;
+        changes.push({ row, col, from, to });
     }
 
     return changes;

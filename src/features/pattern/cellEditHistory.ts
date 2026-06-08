@@ -1,6 +1,21 @@
 import type { BrickCell } from "../../beadMath";
 
 export const MAX_CELL_EDIT_HISTORY = 20;
+export const EMPTY_PALETTE_INDEX = -1;
+export const MARKED_PALETTE_INDEX = -2;
+
+export type PatternPaintSelection =
+    | { kind: "palette"; index: number }
+    | { kind: "restore" }
+    | { kind: "mark" };
+
+export function isMarkedPaletteIndex(paletteIndex: number): boolean {
+    return paletteIndex === MARKED_PALETTE_INDEX;
+}
+
+export function isSchemeBeadIndex(paletteIndex: number): boolean {
+    return paletteIndex >= 0 || isMarkedPaletteIndex(paletteIndex);
+}
 
 export type CellEditChange = {
     row: number;

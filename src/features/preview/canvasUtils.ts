@@ -6,6 +6,10 @@ import {
     type GridLayout,
     type RGB,
 } from "../../beadMath";
+import {
+    EMPTY_PALETTE_INDEX,
+    isMarkedPaletteIndex,
+} from "../pattern/cellEditHistory";
 
 export type SchemeSizeBeads = {
     width: number;
@@ -205,6 +209,33 @@ export type PaintBrickCellsOptions = {
     strokeWidth?: number;
 };
 
+export function paintMarkedBrickCell(
+    ctx: CanvasRenderingContext2D,
+    cell: BrickCell,
+    metrics: BrickLayoutMetrics,
+    options: PaintBrickCellsOptions = {},
+): void {
+    const { strokeWidth } = options;
+    const { radius } = metrics;
+    const lineWidth = strokeWidth ?? Math.max(0.5, metrics.cs * 0.35 * 0.73);
+    const { cx, cy } = getBrickCellCenter(cell, metrics);
+
+    ctx.fillStyle = "#111111";
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+
+    const starSize = Math.max(10, radius * 1.5);
+    ctx.fillStyle = "#f59e0b";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `bold ${starSize}px system-ui, sans-serif`;
+    ctx.fillText("★", cx, cy);
+}
+
 export function paintBrickCell(
     ctx: CanvasRenderingContext2D,
     cell: BrickCell,
@@ -212,6 +243,11 @@ export function paintBrickCell(
     metrics: BrickLayoutMetrics,
     options: PaintBrickCellsOptions = {},
 ): void {
+    if (isMarkedPaletteIndex(cell.paletteIndex)) {
+        paintMarkedBrickCell(ctx, cell, metrics, options);
+        return;
+    }
+
     if (cell.paletteIndex < 0) return;
 
     const { labelPaletteIndices = false, strokeWidth } = options;
@@ -291,8 +327,11 @@ export function findChangedBrickCells(
         const prevPaletteIndex = prevIndexByKey.get(key);
 
         if (prevPaletteIndex === undefined) {
-            if (cell.paletteIndex >= 0) {
-                changes.push({ cell, prevPaletteIndex: -1 });
+            if (
+                cell.paletteIndex >= 0 ||
+                isMarkedPaletteIndex(cell.paletteIndex)
+            ) {
+                changes.push({ cell, prevPaletteIndex: EMPTY_PALETTE_INDEX });
             }
             continue;
         }
@@ -318,7 +357,7 @@ export function applyBrickCellChanges(
     options: PaintBrickCellsOptions = {},
 ): void {
     for (const { cell } of changes) {
-        if (cell.paletteIndex < 0) {
+        if (cell.paletteIndex === EMPTY_PALETTE_INDEX) {
             clearBrickCellAt(
                 ctx,
                 cell,

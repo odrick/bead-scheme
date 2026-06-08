@@ -11,7 +11,14 @@ import {
     computeFitPreviewZoom,
     PREVIEW_ZOOM_STEP,
 } from "../../features/preview/previewZoom";
-import { floodFillChanges } from "../../features/pattern/floodFill";
+import {
+    floodFillChanges,
+    floodFillRestoreChanges,
+} from "../../features/pattern/floodFill";
+import {
+    MARKED_PALETTE_INDEX,
+    type PatternPaintSelection,
+} from "../../features/pattern/cellEditHistory";
 import {
     applyBrickCellChanges,
     computeBrickLayout,
@@ -52,6 +59,12 @@ type PatternPreviewProps = {
             to: number;
         }>,
     ) => void;
+    onRestoreCell: (
+        row: number,
+        col: number,
+        options?: { stroke?: boolean },
+    ) => void;
+    baseCells: BrickCell[];
     onUndoCellEdit: () => void;
     onRedoCellEdit: () => void;
     canUndoCellEdit: boolean;
@@ -200,21 +213,57 @@ function RedoIcon() {
     );
 }
 
+function RestoreColorIcon() {
+    return (
+        <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+        >
+            <path d="M3 7v6h6" />
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+        </svg>
+    );
+}
+
+function MarkStarIcon() {
+    return (
+        <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden
+        >
+            <path d="M12 2.5 14.6 9l7 0.55-5.3 4.55 1.65 6.9L12 17.9 5.05 21l1.65-6.9L1.4 9.55 8.4 9 12 2.5Z" />
+        </svg>
+    );
+}
+
 type PatternColorComboboxProps = {
     palette: RGB[];
-    selectedIndex: number;
-    onSelect: (index: number) => void;
+    selection: PatternPaintSelection;
+    onSelect: (selection: PatternPaintSelection) => void;
 };
 
 function PatternColorCombobox({
     palette,
-    selectedIndex,
+    selection,
     onSelect,
 }: PatternColorComboboxProps) {
     const rootRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
 
-    const selectedColor = palette[selectedIndex];
+    const isPaletteSelected = selection.kind === "palette";
+    const selectedColor = isPaletteSelected
+        ? palette[selection.index]
+        : undefined;
 
     useEffect(() => {
         if (!open) return;
@@ -230,6 +279,11 @@ function PatternColorCombobox({
             document.removeEventListener("mousedown", onDocumentMouseDown);
     }, [open]);
 
+    const pick = (next: PatternPaintSelection) => {
+        onSelect(next);
+        setOpen(false);
+    };
+
     return (
         <div
             ref={rootRef}
@@ -244,11 +298,21 @@ function PatternColorCombobox({
                 aria-haspopup="listbox"
                 onClick={() => setOpen((value) => !value)}
             >
-                {selectedColor && (
-                    <span
-                        className="pattern-color-block"
-                        style={{ background: rgbToCss(selectedColor) }}
-                    />
+                {selection.kind === "restore" ? (
+                    <span className="pattern-color-block pattern-color-block--restore">
+                        <RestoreColorIcon />
+                    </span>
+                ) : selection.kind === "mark" ? (
+                    <span className="pattern-color-block pattern-color-block--mark">
+                        <MarkStarIcon />
+                    </span>
+                ) : (
+                    selectedColor && (
+                        <span
+                            className="pattern-color-block"
+                            style={{ background: rgbToCss(selectedColor) }}
+                        />
+                    )
                 )}
                 <ChevronDownIcon />
             </button>
@@ -264,17 +328,50 @@ function PatternColorCombobox({
                             <button
                                 type="button"
                                 role="option"
-                                aria-selected={index === selectedIndex}
+                                aria-selected={
+                                    isPaletteSelected &&
+                                    selection.index === index
+                                }
                                 aria-label={`Колір ${index + 1}`}
-                                className={`pattern-color-option${index === selectedIndex ? " active" : ""}`}
+                                className={`pattern-color-option${isPaletteSelected && selection.index === index ? " active" : ""}`}
                                 style={{ background: rgbToCss(color) }}
-                                onClick={() => {
-                                    onSelect(index);
-                                    setOpen(false);
-                                }}
+                                onClick={() =>
+                                    pick({ kind: "palette", index })
+                                }
                             />
                         </li>
                     ))}
+                    <li
+                        className="pattern-color-menu-divider"
+                        role="separator"
+                        aria-hidden
+                    />
+                    <li role="presentation">
+                        <button
+                            type="button"
+                            role="option"
+                            aria-selected={selection.kind === "restore"}
+                            aria-label="Відновлення кольору"
+                            title="Відновлення кольору"
+                            className={`pattern-color-option pattern-color-option--restore${selection.kind === "restore" ? " active" : ""}`}
+                            onClick={() => pick({ kind: "restore" })}
+                        >
+                            <RestoreColorIcon />
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button
+                            type="button"
+                            role="option"
+                            aria-selected={selection.kind === "mark"}
+                            aria-label="Відмітки"
+                            title="Відмітки"
+                            className={`pattern-color-option pattern-color-option--mark${selection.kind === "mark" ? " active" : ""}`}
+                            onClick={() => pick({ kind: "mark" })}
+                        >
+                            <MarkStarIcon />
+                        </button>
+                    </li>
                 </ul>
             )}
         </div>
@@ -373,6 +470,8 @@ export function PatternPreview({
     onCellPaletteIndexChange,
     onCellEditStrokeEnd,
     onCellEditBatch,
+    onRestoreCell,
+    baseCells,
     onUndoCellEdit,
     onRedoCellEdit,
     canUndoCellEdit,
@@ -393,7 +492,8 @@ export function PatternPreview({
     });
 
     const [editTool, setEditTool] = useState<EditTool>("pan");
-    const [selectedColorIndex, setSelectedColorIndex] = useState(0);
+    const [paintSelection, setPaintSelection] =
+        useState<PatternPaintSelection>({ kind: "palette", index: 0 });
     const [isPanning, setIsPanning] = useState(false);
 
     const lastAutoFitKeyRef = useRef(0);
@@ -435,9 +535,17 @@ export function PatternPreview({
     ]);
 
     useEffect(() => {
-        setSelectedColorIndex((index) =>
-            Math.min(index, Math.max(0, patternPalette.length - 1)),
-        );
+        setPaintSelection((selection) => {
+            if (selection.kind !== "palette") return selection;
+
+            return {
+                kind: "palette",
+                index: Math.min(
+                    selection.index,
+                    Math.max(0, patternPalette.length - 1),
+                ),
+            };
+        });
     }, [patternPalette.length]);
 
     useEffect(() => {
@@ -606,26 +714,56 @@ export function PatternPreview({
             if (!cell) return;
 
             if (editTool === "fill") {
-                const changes = floodFillChanges(
-                    cells,
-                    schemeSizeBeads,
-                    gridLayout,
-                    cell.row,
-                    cell.col,
-                    selectedColorIndex,
-                );
+                if (paintSelection.kind === "restore") {
+                    onCellEditBatch(
+                        floodFillRestoreChanges(
+                            cells,
+                            baseCells,
+                            schemeSizeBeads,
+                            gridLayout,
+                            cell.row,
+                            cell.col,
+                        ),
+                    );
+                } else {
+                    const targetIndex =
+                        paintSelection.kind === "mark"
+                            ? MARKED_PALETTE_INDEX
+                            : paintSelection.index;
 
-                onCellEditBatch(changes);
+                    onCellEditBatch(
+                        floodFillChanges(
+                            cells,
+                            schemeSizeBeads,
+                            gridLayout,
+                            cell.row,
+                            cell.col,
+                            targetIndex,
+                        ),
+                    );
+                }
+
                 return;
             }
 
             if (editTool === "pencil") {
-                onCellPaletteIndexChange(
-                    cell.row,
-                    cell.col,
-                    selectedColorIndex,
-                    { stroke: true },
-                );
+                if (paintSelection.kind === "restore") {
+                    onRestoreCell(cell.row, cell.col, { stroke: true });
+                } else if (paintSelection.kind === "mark") {
+                    onCellPaletteIndexChange(
+                        cell.row,
+                        cell.col,
+                        MARKED_PALETTE_INDEX,
+                        { stroke: true },
+                    );
+                } else {
+                    onCellPaletteIndexChange(
+                        cell.row,
+                        cell.col,
+                        paintSelection.index,
+                        { stroke: true },
+                    );
+                }
             } else {
                 onCellPaletteIndexChange(cell.row, cell.col, -1, {
                     stroke: true,
@@ -633,14 +771,16 @@ export function PatternPreview({
             }
         },
         [
+            baseCells,
             cells,
             cellSizePx,
             editTool,
             gridLayout,
             onCellPaletteIndexChange,
             onCellEditBatch,
+            onRestoreCell,
+            paintSelection,
             previewZoom,
-            selectedColorIndex,
             schemeSizeBeads,
         ],
     );
@@ -814,8 +954,8 @@ export function PatternPreview({
 
                     <PatternColorCombobox
                         palette={patternPalette}
-                        selectedIndex={selectedColorIndex}
-                        onSelect={setSelectedColorIndex}
+                        selection={paintSelection}
+                        onSelect={setPaintSelection}
                     />
 
                     <PatternSchemeSizeControls
