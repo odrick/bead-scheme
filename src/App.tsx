@@ -203,6 +203,17 @@ export default function App() {
 
                     <OriginalImagePreview
                         bitmap={imageUpload.bitmap}
+                        sourceTransform={patternModel.sourceTransform}
+                        onSourceTransformCommit={(transform) =>
+                            commitWithRendering(() =>
+                                patternModel.commitSourceTransform(transform),
+                            )
+                        }
+                        onResetSourceTransform={() =>
+                            commitWithRendering(() =>
+                                patternModel.resetSourceTransform(),
+                            )
+                        }
                         maskImages={patternModel.availableMaskImages}
                         maskSettings={patternModel.maskSettings}
                         onMaskKindChange={(kind) =>

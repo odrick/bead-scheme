@@ -39,6 +39,12 @@ import {
 import { applyImageMask } from "../mask/imageMask";
 import { loadImageElement, loadImageElementFromFile } from "../mask/loadMaskImage";
 import {
+    applySourceTransform,
+    defaultSourceTransform,
+    sourceTransformKey,
+    type SourceTransform,
+} from "../image/sourceTransform";
+import {
     centerMaskOnImage,
     defaultMaskSettings,
     type BuiltInMaskKind,
@@ -135,6 +141,9 @@ type PatternModel = {
     setMaskKind: (kind: MaskKind) => void;
     commitMaskSettings: (settings: ImageMaskSettings) => void;
     setCustomMaskFile: (file: File | null) => Promise<void>;
+    sourceTransform: SourceTransform;
+    commitSourceTransform: (transform: SourceTransform) => void;
+    resetSourceTransform: () => void;
 };
 
 type UsePatternModelOptions = {
@@ -188,10 +197,14 @@ export function usePatternModel(
     const [maskSettings, setMaskSettings] = useState<ImageMaskSettings>(
         defaultMaskSettings,
     );
+    const [sourceTransform, setSourceTransform] = useState<SourceTransform>(
+        defaultSourceTransform,
+    );
     const [customMaskBitmap, setCustomMaskBitmap] =
         useState<HTMLImageElement | null>(null);
     const bitmapSizeKeyRef = useRef("");
     const skipMaskCenterRef = useRef(false);
+    const skipSourceTransformResetRef = useRef(false);
     const customMaskLoadKeyRef = useRef("");
 
     const baseCellsRef = useRef<BrickCell[]>([]);
@@ -219,16 +232,22 @@ export function usePatternModel(
         [maskImages, customMaskBitmap],
     );
 
-    const processedSource = useMemo(() => {
+    const transformedSource = useMemo(() => {
         if (!bitmap || bitmap.width === 0) return null;
 
-        if (maskSettings.kind === "none") return bitmap;
+        return applySourceTransform(bitmap, sourceTransform);
+    }, [bitmap, sourceTransform]);
+
+    const processedSource = useMemo(() => {
+        if (!transformedSource) return null;
+
+        if (maskSettings.kind === "none") return transformedSource;
 
         const maskImage = resolveMaskImage(maskSettings, availableMaskImages);
-        if (!maskImage) return bitmap;
+        if (!maskImage) return transformedSource;
 
-        return applyImageMask(bitmap, maskImage, maskSettings);
-    }, [bitmap, availableMaskImages, maskSettings]);
+        return applyImageMask(transformedSource, maskImage, maskSettings);
+    }, [transformedSource, availableMaskImages, maskSettings]);
 
     useEffect(() => {
         const stored = maskSettings.customImage;
@@ -271,6 +290,7 @@ export function usePatternModel(
             customMaskLoadKeyRef.current = "";
             setCustomMaskBitmap(null);
             setMaskSettings(defaultMaskSettings());
+            setSourceTransform(defaultSourceTransform());
             return;
         }
 
@@ -282,12 +302,17 @@ export function usePatternModel(
 
         if (skipMaskCenterRef.current) {
             skipMaskCenterRef.current = false;
-            return;
+        } else {
+            setMaskSettings((current) =>
+                centerMaskOnImage(bitmap.width, bitmap.height, current),
+            );
         }
 
-        setMaskSettings((current) =>
-            centerMaskOnImage(bitmap.width, bitmap.height, current),
-        );
+        if (skipSourceTransformResetRef.current) {
+            skipSourceTransformResetRef.current = false;
+        } else {
+            setSourceTransform(defaultSourceTransform());
+        }
     }, [bitmap]);
 
     const { palette, imageCells, imageGridBounds } = useMemo(() => {
@@ -352,6 +377,7 @@ export function usePatternModel(
                 maskSettings.scale,
                 maskSettings.offsetX,
                 maskSettings.offsetY,
+                sourceTransformKey(sourceTransform),
             ].join(":"),
         [
             bitmap,
@@ -361,6 +387,7 @@ export function usePatternModel(
             backgroundHex,
             gridLayout,
             maskSettings,
+            sourceTransform,
         ],
     );
 
@@ -402,6 +429,7 @@ export function usePatternModel(
                 maskSettings.scale,
                 maskSettings.offsetX,
                 maskSettings.offsetY,
+                sourceTransformKey(sourceTransform),
             ].join(":"),
         [
             bitmap,
@@ -414,6 +442,7 @@ export function usePatternModel(
             schemeSizeBeads.width,
             schemeSizeBeads.height,
             maskSettings,
+            sourceTransform,
         ],
     );
 
@@ -834,6 +863,7 @@ export function usePatternModel(
                 canvasBackground,
                 schemeSize: schemeSizeBeads,
                 mask: serializeMaskSettings(maskSettings),
+                sourceTransform,
             },
             paletteColors:
                 paletteOverrides.baseKey === paletteBaseKey
@@ -863,6 +893,7 @@ export function usePatternModel(
         cellsBaseKey,
         editHistory,
         maskSettings,
+        sourceTransform,
     ]);
 
     const setMaskKind = useCallback(
@@ -914,6 +945,14 @@ export function usePatternModel(
         [bitmap],
     );
 
+    const commitSourceTransform = useCallback((transform: SourceTransform) => {
+        setSourceTransform(transform);
+    }, []);
+
+    const resetSourceTransform = useCallback(() => {
+        setSourceTransform(defaultSourceTransform());
+    }, []);
+
     const loadProject = useCallback(
         (project: ProjectExportData) => {
             const { settings, paletteColors, cellEdits, editHistory: history } =
@@ -936,7 +975,9 @@ export function usePatternModel(
             setCanvasBackground(settings.canvasBackground);
             setSchemeSizeBeadsState(settings.schemeSize);
             skipMaskCenterRef.current = true;
+            skipSourceTransformResetRef.current = true;
             setMaskSettings(settings.mask ?? defaultMaskSettings());
+            setSourceTransform(settings.sourceTransform ?? defaultSourceTransform());
             bitmapSizeKeyRef.current = `${bitmap?.width ?? 0}x${bitmap?.height ?? 0}`;
             // Force the restore effect to run even if all other deps are unchanged
             // (e.g. same image + same settings but different cell edits/palette).
@@ -954,6 +995,9 @@ export function usePatternModel(
                 settings.mask?.scale ?? 1,
                 settings.mask?.offsetX ?? 0,
                 settings.mask?.offsetY ?? 0,
+                sourceTransformKey(
+                    settings.sourceTransform ?? defaultSourceTransform(),
+                ),
             ].join(":");
         },
         [bitmap, setPreviewZoom],
@@ -1007,5 +1051,8 @@ export function usePatternModel(
         setMaskKind,
         commitMaskSettings,
         setCustomMaskFile,
+        sourceTransform,
+        commitSourceTransform,
+        resetSourceTransform,
     };
 }

@@ -8,6 +8,7 @@ type DeferredRangeSliderBaseProps = {
     onCommit: (value: number) => void;
     onDraftChange?: (value: number) => void;
     "aria-label"?: string;
+    tooltip?: string;
 };
 
 type DeferredRangeSliderProps = DeferredRangeSliderBaseProps &
@@ -15,12 +16,20 @@ type DeferredRangeSliderProps = DeferredRangeSliderBaseProps &
         | {
               title: string;
               showNumberInput: true;
+              variant?: "default";
               label?: never;
           }
         | {
               title?: never;
               showNumberInput?: false;
+              variant?: "default";
               label: (value: number) => ReactNode;
+          }
+        | {
+              title?: never;
+              showNumberInput?: never;
+              label?: never;
+              variant: "inline";
           }
     );
 
@@ -32,6 +41,7 @@ export function DeferredRangeSlider({
     onCommit,
     onDraftChange,
     "aria-label": ariaLabel,
+    tooltip,
     ...rest
 }: DeferredRangeSliderProps) {
     const [draft, setDraft] = useState(value);
@@ -39,6 +49,7 @@ export function DeferredRangeSlider({
     const isDraggingRef = useRef(false);
     const isInputFocusedRef = useRef(false);
 
+    const variant = "variant" in rest ? rest.variant ?? "default" : "default";
     const showNumberInput = "showNumberInput" in rest && rest.showNumberInput;
     const title = "title" in rest ? rest.title : undefined;
     const label = "label" in rest ? rest.label : undefined;
@@ -91,6 +102,63 @@ export function DeferredRangeSlider({
         setDraft(value);
     };
 
+    const rangeInput = (
+        <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={draft}
+            aria-label={
+                showNumberInput ? `${ariaLabel}, повзунок` : ariaLabel
+            }
+            title={tooltip}
+            onPointerDown={(event) => {
+                isDraggingRef.current = true;
+                event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+
+                if (!isDraggingRef.current) return;
+
+                isDraggingRef.current = false;
+                commit(parseValue(event.currentTarget.value));
+            }}
+            onPointerCancel={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+
+                isDraggingRef.current = false;
+                setDraft(value);
+                onDraftChange?.(value);
+
+                if (!isInputFocusedRef.current) {
+                    setInputDraft(String(value));
+                }
+            }}
+            onChange={(event) => {
+                const next = parseValue(event.currentTarget.value);
+                updateDraft(next);
+
+                if (!isDraggingRef.current) {
+                    commit(next);
+                }
+            }}
+        />
+    );
+
+    if (variant === "inline") {
+        return (
+            <div className="deferred-range-inline" title={tooltip}>
+                {rangeInput}
+            </div>
+        );
+    }
+
     return (
         <div className="field">
             <span className="label deferred-range-label">
@@ -126,55 +194,7 @@ export function DeferredRangeSlider({
                     label?.(draft)
                 )}
             </span>
-            <input
-                type="range"
-                min={min}
-                max={max}
-                step={step}
-                value={draft}
-                aria-label={
-                    showNumberInput ? `${ariaLabel}, повзунок` : ariaLabel
-                }
-                onPointerDown={(event) => {
-                    isDraggingRef.current = true;
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                }}
-                onPointerUp={(event) => {
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                        event.currentTarget.releasePointerCapture(
-                            event.pointerId,
-                        );
-                    }
-
-                    if (!isDraggingRef.current) return;
-
-                    isDraggingRef.current = false;
-                    commit(parseValue(event.currentTarget.value));
-                }}
-                onPointerCancel={(event) => {
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                        event.currentTarget.releasePointerCapture(
-                            event.pointerId,
-                        );
-                    }
-
-                    isDraggingRef.current = false;
-                    setDraft(value);
-                    onDraftChange?.(value);
-
-                    if (!isInputFocusedRef.current) {
-                        setInputDraft(String(value));
-                    }
-                }}
-                onChange={(event) => {
-                    const next = parseValue(event.target.value);
-                    updateDraft(next);
-
-                    if (!isDraggingRef.current) {
-                        commit(next);
-                    }
-                }}
-            />
+            {rangeInput}
         </div>
     );
 }

@@ -12,6 +12,10 @@ import {
     type ImageMaskSettings,
     type StoredMaskImage,
 } from "../mask/maskTypes";
+import {
+    parseSourceTransform,
+    type SourceTransform,
+} from "../image/sourceTransform";
 
 export const PROJECT_FORMAT_VERSION = 1;
 export const PROJECT_FILE_EXTENSION = "bsp";
@@ -33,6 +37,7 @@ export type BeadSchemeProject = {
         canvasBackground: CanvasBackground;
         schemeSize: SchemeSizeBeads;
         mask?: ImageMaskSettings;
+        sourceTransform?: SourceTransform;
     };
     paletteColors: Record<string, RGB>;
     cellEdits: Record<string, number>;
@@ -272,6 +277,7 @@ export function parseProjectFile(text: string): BeadSchemeProject {
                 height: schemeSize.height,
             },
             mask: parseMaskSettings(settings.mask),
+            sourceTransform: parseSourceTransform(settings.sourceTransform),
         },
         paletteColors: parsePaletteColors(parsed.paletteColors),
         cellEdits: parseCellEdits(parsed.cellEdits),
