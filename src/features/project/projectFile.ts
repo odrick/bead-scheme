@@ -7,7 +7,11 @@ import type { CellEditChange } from "../pattern/cellEditHistory";
 import type { SchemeSizeBeads } from "../pattern/schemeGrid";
 import type { CanvasBackground } from "../preview/canvasUtils";
 import { isMaskKind } from "../mask/maskAssets";
-import { defaultMaskSettings, type ImageMaskSettings } from "../mask/maskTypes";
+import {
+    defaultMaskSettings,
+    type ImageMaskSettings,
+    type StoredMaskImage,
+} from "../mask/maskTypes";
 
 export const PROJECT_FORMAT_VERSION = 1;
 export const PROJECT_FILE_EXTENSION = "bsp";
@@ -128,6 +132,19 @@ function parseCellEdits(value: unknown): Record<string, number> {
     return result;
 }
 
+function parseStoredMaskImage(value: unknown): StoredMaskImage | undefined {
+    if (!isRecord(value)) return undefined;
+
+    const mimeType = value.mimeType;
+    const base64 = value.base64;
+
+    if (typeof mimeType !== "string" || typeof base64 !== "string" || !base64) {
+        return undefined;
+    }
+
+    return { mimeType, base64 };
+}
+
 function parseMaskSettings(value: unknown): ImageMaskSettings {
     if (!isRecord(value)) return defaultMaskSettings();
 
@@ -146,7 +163,15 @@ function parseMaskSettings(value: unknown): ImageMaskSettings {
         return defaultMaskSettings();
     }
 
-    return { kind, scale, offsetX, offsetY };
+    const customImage = parseStoredMaskImage(value.customImage);
+
+    return {
+        kind,
+        scale,
+        offsetX,
+        offsetY,
+        ...(customImage ? { customImage } : {}),
+    };
 }
 
 function parseEditHistory(value: unknown): BeadSchemeProject["editHistory"] {

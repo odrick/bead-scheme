@@ -1,24 +1,15 @@
 import { useEffect, useState } from "react";
 import { MASK_ASSET_URLS } from "./maskAssets";
-import type { MaskKind } from "./maskTypes";
+import { loadImageElement } from "./loadMaskImage";
+import type { BuiltInMaskKind } from "./maskTypes";
 
-type LoadedMaskImages = Record<Exclude<MaskKind, "none">, HTMLImageElement | null>;
+type LoadedMaskImages = Record<BuiltInMaskKind, HTMLImageElement | null>;
 
 const INITIAL: LoadedMaskImages = {
     circle: null,
     tie: null,
     gerdana: null,
 };
-
-function loadMaskImage(url: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.decoding = "async";
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error(`Не вдалося завантажити маску: ${url}`));
-        img.src = url;
-    });
-}
 
 export function useMaskImages(): LoadedMaskImages {
     const [images, setImages] = useState<LoadedMaskImages>(INITIAL);
@@ -28,10 +19,10 @@ export function useMaskImages(): LoadedMaskImages {
 
         void (async () => {
             const entries = await Promise.all(
-                (Object.entries(MASK_ASSET_URLS) as [Exclude<MaskKind, "none">, string][]).map(
+                (Object.entries(MASK_ASSET_URLS) as [BuiltInMaskKind, string][]).map(
                     async ([kind, url]) => {
                         try {
-                            const image = await loadMaskImage(url);
+                            const image = await loadImageElement(url);
                             return [kind, image] as const;
                         } catch (error) {
                             console.warn(error);

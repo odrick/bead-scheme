@@ -37,13 +37,22 @@ import {
     type SchemeSizeBeads,
 } from "./schemeGrid";
 import { applyImageMask } from "../mask/imageMask";
+import { loadImageElement, loadImageElementFromFile } from "../mask/loadMaskImage";
 import {
     centerMaskOnImage,
     defaultMaskSettings,
+    type BuiltInMaskKind,
     type ImageMaskSettings,
     type MaskKind,
+    serializeMaskSettings,
 } from "../mask/maskTypes";
+import {
+    maskImageKey,
+    resolveMaskImage,
+    type AvailableMaskImages,
+} from "../mask/resolveMaskImage";
 import type { ProjectExportData } from "../project/projectFile";
+import { encodeImageToBase64, projectImageToDataUrl } from "../project/projectFile";
 
 const DEFAULT_BG = "#ffffff";
 const BG_MATCH_SQ = 55 * 55;
@@ -121,12 +130,15 @@ type PatternModel = {
     exportProjectData: () => ProjectExportData | null;
     loadProject: (project: ProjectExportData) => void;
     maskSettings: ImageMaskSettings;
+    availableMaskImages: AvailableMaskImages;
+    customMaskBitmap: HTMLImageElement | null;
     setMaskKind: (kind: MaskKind) => void;
     commitMaskSettings: (settings: ImageMaskSettings) => void;
+    setCustomMaskFile: (file: File | null) => Promise<void>;
 };
 
 type UsePatternModelOptions = {
-    maskImages: Record<Exclude<MaskKind, "none">, HTMLImageElement | null>;
+    maskImages: Record<BuiltInMaskKind, HTMLImageElement | null>;
 };
 
 export function usePatternModel(
@@ -176,8 +188,11 @@ export function usePatternModel(
     const [maskSettings, setMaskSettings] = useState<ImageMaskSettings>(
         defaultMaskSettings,
     );
+    const [customMaskBitmap, setCustomMaskBitmap] =
+        useState<HTMLImageElement | null>(null);
     const bitmapSizeKeyRef = useRef("");
     const skipMaskCenterRef = useRef(false);
+    const customMaskLoadKeyRef = useRef("");
 
     const baseCellsRef = useRef<BrickCell[]>([]);
     const cellOverridesRef = useRef(cellOverrides);
@@ -196,20 +211,65 @@ export function usePatternModel(
         return bitmap.width / Math.max(2, beadsPerRow);
     }, [bitmap, beadsPerRow]);
 
+    const availableMaskImages = useMemo(
+        (): AvailableMaskImages => ({
+            ...maskImages,
+            custom: customMaskBitmap,
+        }),
+        [maskImages, customMaskBitmap],
+    );
+
     const processedSource = useMemo(() => {
         if (!bitmap || bitmap.width === 0) return null;
 
         if (maskSettings.kind === "none") return bitmap;
 
-        const maskImage = maskImages[maskSettings.kind];
+        const maskImage = resolveMaskImage(maskSettings, availableMaskImages);
         if (!maskImage) return bitmap;
 
         return applyImageMask(bitmap, maskImage, maskSettings);
-    }, [bitmap, maskImages, maskSettings]);
+    }, [bitmap, availableMaskImages, maskSettings]);
+
+    useEffect(() => {
+        const stored = maskSettings.customImage;
+        const loadKey = stored
+            ? `${stored.mimeType}:${stored.base64.length}:${stored.base64.slice(0, 24)}`
+            : "";
+
+        if (customMaskLoadKeyRef.current === loadKey) return;
+
+        customMaskLoadKeyRef.current = loadKey;
+
+        if (!stored) {
+            setCustomMaskBitmap(null);
+            return;
+        }
+
+        let cancelled = false;
+
+        void loadImageElement(projectImageToDataUrl(stored))
+            .then((image) => {
+                if (!cancelled) {
+                    setCustomMaskBitmap(image);
+                }
+            })
+            .catch((error) => {
+                console.warn(error);
+                if (!cancelled) {
+                    setCustomMaskBitmap(null);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [maskSettings.customImage]);
 
     useEffect(() => {
         if (!bitmap) {
             bitmapSizeKeyRef.current = "";
+            customMaskLoadKeyRef.current = "";
+            setCustomMaskBitmap(null);
             setMaskSettings(defaultMaskSettings());
             return;
         }
@@ -288,7 +348,7 @@ export function usePatternModel(
                 backgroundMode,
                 backgroundHex,
                 gridLayout,
-                maskSettings.kind,
+                maskImageKey(maskSettings),
                 maskSettings.scale,
                 maskSettings.offsetX,
                 maskSettings.offsetY,
@@ -338,7 +398,7 @@ export function usePatternModel(
                 // Для ажурної розмір схеми не змінює позиції клітинок — не включаємо до ключа.
                 gridLayout !== "lace" ? schemeSizeBeads.width : 0,
                 gridLayout !== "lace" ? schemeSizeBeads.height : 0,
-                maskSettings.kind,
+                maskImageKey(maskSettings),
                 maskSettings.scale,
                 maskSettings.offsetX,
                 maskSettings.offsetY,
@@ -773,7 +833,7 @@ export function usePatternModel(
                 labelPaletteIndices,
                 canvasBackground,
                 schemeSize: schemeSizeBeads,
-                mask: maskSettings,
+                mask: serializeMaskSettings(maskSettings),
             },
             paletteColors:
                 paletteOverrides.baseKey === paletteBaseKey
@@ -824,6 +884,36 @@ export function usePatternModel(
         setMaskSettings(settings);
     }, []);
 
+    const setCustomMaskFile = useCallback(
+        async (file: File | null) => {
+            if (!file) {
+                customMaskLoadKeyRef.current = "";
+                setCustomMaskBitmap(null);
+                setMaskSettings((current) => {
+                    const { customImage: _removed, ...rest } = current;
+                    return { ...rest };
+                });
+                return;
+            }
+
+            if (!file.type.startsWith("image/")) return;
+
+            const image = await loadImageElementFromFile(file);
+            const customImage = await encodeImageToBase64(image);
+
+            customMaskLoadKeyRef.current = `${customImage.mimeType}:${customImage.base64.length}:${customImage.base64.slice(0, 24)}`;
+            setCustomMaskBitmap(image);
+            setMaskSettings((current) => {
+                const next = { ...current, kind: "custom" as const, customImage };
+
+                if (!bitmap) return next;
+
+                return centerMaskOnImage(bitmap.width, bitmap.height, next);
+            });
+        },
+        [bitmap],
+    );
+
     const loadProject = useCallback(
         (project: ProjectExportData) => {
             const { settings, paletteColors, cellEdits, editHistory: history } =
@@ -860,7 +950,7 @@ export function usePatternModel(
                 settings.backgroundMode,
                 settings.backgroundHex,
                 settings.gridLayout,
-                settings.mask?.kind ?? "none",
+                settings.mask ? maskImageKey(settings.mask) : "none",
                 settings.mask?.scale ?? 1,
                 settings.mask?.offsetX ?? 0,
                 settings.mask?.offsetY ?? 0,
@@ -911,8 +1001,11 @@ export function usePatternModel(
         baseCells,
         exportProjectData,
         loadProject,
+        availableMaskImages,
+        customMaskBitmap,
         maskSettings,
         setMaskKind,
         commitMaskSettings,
+        setCustomMaskFile,
     };
 }

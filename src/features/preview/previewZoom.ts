@@ -6,7 +6,7 @@ import {
 
 export const PREVIEW_ZOOM_MIN = 0.01;
 export const PREVIEW_ZOOM_MAX = 3;
-export const PREVIEW_ZOOM_STEP = 0.05;
+export const PREVIEW_ZOOM_STEP = 0.01;
 
 export function clampPreviewZoom(value: number): number {
     const stepped =

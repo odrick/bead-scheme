@@ -18,6 +18,7 @@ import {
     MASK_SCALE_STEP,
 } from "../../features/mask/maskTypes";
 import type { ImageMaskSettings, MaskKind } from "../../features/mask/maskTypes";
+import { resolveMaskImage, type AvailableMaskImages } from "../../features/mask/resolveMaskImage";
 import { drawCheckerboard, getCanvasPointerCoords } from "../../features/preview/canvasUtils";
 
 const PREVIEW_MAX_WIDTH = 420;
@@ -25,10 +26,11 @@ const MASK_OVERLAY_ALPHA = 0.45;
 
 type OriginalImagePreviewProps = {
     bitmap: HTMLImageElement | null;
-    maskImages: Record<Exclude<MaskKind, "none">, HTMLImageElement | null>;
+    maskImages: AvailableMaskImages;
     maskSettings: ImageMaskSettings;
     onMaskKindChange: (kind: MaskKind) => void;
     onMaskCommit: (settings: ImageMaskSettings) => void;
+    onCustomMaskFileSelect: (file: File | null) => void;
     isDragOver: boolean;
     onDragOver: DragEventHandler<HTMLElement>;
     onDragLeave: DragEventHandler<HTMLElement>;
@@ -41,12 +43,14 @@ export function OriginalImagePreview({
     maskSettings,
     onMaskKindChange,
     onMaskCommit,
+    onCustomMaskFileSelect,
     isDragOver,
     onDragOver,
     onDragLeave,
     onDrop,
 }: OriginalImagePreviewProps) {
     const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
+    const customMaskInputRef = useRef<HTMLInputElement>(null);
     const displayScaleRef = useRef(1);
     const previewMaskRef = useRef(maskSettings);
     const isDraggingMaskRef = useRef(false);
@@ -71,8 +75,7 @@ export function OriginalImagePreview({
         setPreviewMask(maskSettings);
     }, [maskSettings]);
 
-    const activeMask =
-        previewMask.kind === "none" ? null : maskImages[previewMask.kind];
+    const activeMask = resolveMaskImage(previewMask, maskImages);
 
     const redraw = useCallback(() => {
         const canvas = sourceCanvasRef.current;
@@ -206,7 +209,9 @@ export function OriginalImagePreview({
         [maskSettings, onMaskCommit, updatePreviewMask],
     );
 
-    const maskActive = previewMask.kind !== "none";
+    const maskActive =
+        previewMask.kind !== "none" &&
+        (previewMask.kind !== "custom" || !!maskImages.custom);
 
     return (
         <section
@@ -253,6 +258,32 @@ export function OriginalImagePreview({
                                 )}
                             </select>
                         </label>
+
+                        {maskSettings.kind === "custom" && (
+                            <label className="field upload-field">
+                                <span className="label">Зображення маски</span>
+                                <input
+                                    ref={customMaskInputRef}
+                                    className="upload-input-hidden"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(event) => {
+                                        onCustomMaskFileSelect(
+                                            event.target.files?.[0] ?? null,
+                                        );
+                                        event.target.value = "";
+                                    }}
+                                />
+                                <input
+                                    type="button"
+                                    className="upload-button"
+                                    value="Обрати зображення маски"
+                                    onClick={() =>
+                                        customMaskInputRef.current?.click()
+                                    }
+                                />
+                            </label>
+                        )}
 
                         {maskActive && (
                             <DeferredRangeSlider

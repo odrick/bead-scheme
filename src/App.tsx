@@ -203,7 +203,7 @@ export default function App() {
 
                     <OriginalImagePreview
                         bitmap={imageUpload.bitmap}
-                        maskImages={maskImages}
+                        maskImages={patternModel.availableMaskImages}
                         maskSettings={patternModel.maskSettings}
                         onMaskKindChange={(kind) =>
                             commitWithRendering(() =>
@@ -215,6 +215,9 @@ export default function App() {
                                 patternModel.commitMaskSettings(settings),
                             )
                         }
+                        onCustomMaskFileSelect={(file) => {
+                            void patternModel.setCustomMaskFile(file);
+                        }}
                         isDragOver={imageUpload.isOriginalDragOver}
                         onDragOver={imageUpload.onOriginalDragOver}
                         onDragLeave={imageUpload.onOriginalDragLeave}
