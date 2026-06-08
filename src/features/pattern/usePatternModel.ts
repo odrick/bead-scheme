@@ -71,6 +71,8 @@ type PatternModel = {
     setBackgroundHex: (value: string) => void;
     previewZoom: number;
     setPreviewZoom: Dispatch<SetStateAction<number>>;
+    labelPaletteIndices: boolean;
+    setLabelPaletteIndices: (value: boolean) => void;
     canvasBackground: CanvasBackground;
     setCanvasBackground: (value: CanvasBackground) => void;
     backgroundRgb: RGB;
@@ -111,6 +113,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         useState<BackgroundMode>("color");
     const [backgroundHex, setBackgroundHex] = useState(DEFAULT_BG);
     const [previewZoom, setPreviewZoomState] = useState(1.2);
+    const [labelPaletteIndices, setLabelPaletteIndices] = useState(false);
     const setPreviewZoom = useCallback((value: SetStateAction<number>) => {
         setPreviewZoomState((prev) => {
             const next = typeof value === "function" ? value(prev) : value;
@@ -666,6 +669,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
                 backgroundMode,
                 backgroundHex,
                 previewZoom,
+                labelPaletteIndices,
                 canvasBackground,
                 schemeSize: schemeSizeBeads,
             },
@@ -690,6 +694,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         backgroundMode,
         backgroundHex,
         previewZoom,
+        labelPaletteIndices,
         canvasBackground,
         schemeSizeBeads,
         paletteOverrides,
@@ -717,6 +722,7 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
             setBackgroundMode(settings.backgroundMode);
             setBackgroundHex(settings.backgroundHex);
             setPreviewZoom(settings.previewZoom);
+            setLabelPaletteIndices(settings.labelPaletteIndices ?? false);
             setCanvasBackground(settings.canvasBackground);
             setSchemeSizeBeadsState(settings.schemeSize);
 
@@ -746,6 +752,8 @@ export function usePatternModel(bitmap: HTMLImageElement | null): PatternModel {
         setBackgroundHex,
         previewZoom,
         setPreviewZoom,
+        labelPaletteIndices,
+        setLabelPaletteIndices,
         canvasBackground,
         setCanvasBackground,
         backgroundRgb,

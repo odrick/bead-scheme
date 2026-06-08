@@ -81,12 +81,12 @@ body {
 
 .field.checkbox {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.55rem;
 }
 
 .field.checkbox input {
-    margin-top: 0.18rem;
+    flex-shrink: 0;
     accent-color: var(--accent);
 }
 

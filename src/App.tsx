@@ -25,8 +25,10 @@ export default function App() {
     const imageUpload = useImageUpload();
     const patternModel = usePatternModel(imageUpload.bitmap);
     const [exportDialogOpen, setExportDialogOpen] = useState(false);
+    const [previewAutoFitKey, setPreviewAutoFitKey] = useState(0);
     const projectInputRef = useRef<HTMLInputElement>(null);
     const pendingProjectRef = useRef<BeadSchemeProject | null>(null);
+    const skipBitmapAutoFitRef = useRef(false);
 
     useEffect(() => {
         const pending = pendingProjectRef.current;
@@ -34,7 +36,19 @@ export default function App() {
 
         pendingProjectRef.current = null;
         patternModel.loadProject(pending);
+        setPreviewAutoFitKey((key) => key + 1);
     }, [imageUpload.bitmap, patternModel]);
+
+    useEffect(() => {
+        if (!imageUpload.bitmap) return;
+
+        if (skipBitmapAutoFitRef.current) {
+            skipBitmapAutoFitRef.current = false;
+            return;
+        }
+
+        setPreviewAutoFitKey((key) => key + 1);
+    }, [imageUpload.bitmap]);
 
     const handleSaveProject = useCallback(async () => {
         if (!imageUpload.bitmap) return;
@@ -61,6 +75,7 @@ export default function App() {
             try {
                 const project = await readProjectFile(file);
                 pendingProjectRef.current = project;
+                skipBitmapAutoFitRef.current = true;
                 imageUpload.loadFromDataUrl(projectImageToDataUrl(project.image));
             } catch (error) {
                 pendingProjectRef.current = null;
@@ -124,6 +139,10 @@ export default function App() {
                         onBackgroundHexChange={patternModel.setBackgroundHex}
                         previewZoom={patternModel.previewZoom}
                         onPreviewZoomChange={patternModel.setPreviewZoom}
+                        labelPaletteIndices={patternModel.labelPaletteIndices}
+                        onLabelPaletteIndicesChange={
+                            patternModel.setLabelPaletteIndices
+                        }
                         canvasBackground={patternModel.canvasBackground}
                         onCanvasBackgroundChange={
                             patternModel.setCanvasBackground
@@ -148,12 +167,14 @@ export default function App() {
                     />
 
                     <PatternPreview
+                        autoFitZoomKey={previewAutoFitKey}
                         bitmap={imageUpload.bitmap}
                         cells={patternModel.cells}
                         cellSizePx={patternModel.cellSizePx}
                         patternPalette={patternModel.patternPalette}
                         previewZoom={patternModel.previewZoom}
                         onPreviewZoomChange={patternModel.setPreviewZoom}
+                        labelPaletteIndices={patternModel.labelPaletteIndices}
                         gridLayout={patternModel.gridLayout}
                         canvasBackground={patternModel.canvasBackground}
                         onCellPaletteIndexChange={

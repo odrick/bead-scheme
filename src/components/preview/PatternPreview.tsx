@@ -7,7 +7,10 @@ import {
     type SetStateAction,
 } from "react";
 import { rgbToCss, type BrickCell, type GridLayout, type RGB } from "../../beadMath";
-import { PREVIEW_ZOOM_STEP } from "../../features/preview/previewZoom";
+import {
+    computeFitPreviewZoom,
+    PREVIEW_ZOOM_STEP,
+} from "../../features/preview/previewZoom";
 import { floodFillChanges } from "../../features/pattern/floodFill";
 import {
     getCanvasPointerCoords,
@@ -21,12 +24,14 @@ import {
 type EditTool = "pan" | "pencil" | "eraser" | "fill";
 
 type PatternPreviewProps = {
+    autoFitZoomKey: number;
     bitmap: HTMLImageElement | null;
     cells: BrickCell[];
     cellSizePx: number;
     patternPalette: RGB[];
     previewZoom: number;
     onPreviewZoomChange: Dispatch<SetStateAction<number>>;
+    labelPaletteIndices: boolean;
     gridLayout: GridLayout;
     canvasBackground: CanvasBackground;
     onCellPaletteIndexChange: (
@@ -352,12 +357,14 @@ function PatternSchemeSizeControls({
 }
 
 export function PatternPreview({
+    autoFitZoomKey,
     bitmap,
     cells,
     cellSizePx,
     patternPalette,
     previewZoom,
     onPreviewZoomChange,
+    labelPaletteIndices,
     gridLayout,
     canvasBackground,
     onCellPaletteIndexChange,
@@ -385,6 +392,44 @@ export function PatternPreview({
     const [editTool, setEditTool] = useState<EditTool>("pan");
     const [selectedColorIndex, setSelectedColorIndex] = useState(0);
     const [isPanning, setIsPanning] = useState(false);
+
+    const lastAutoFitKeyRef = useRef(0);
+
+    useEffect(() => {
+        if (autoFitZoomKey === 0) return;
+        if (autoFitZoomKey === lastAutoFitKeyRef.current) return;
+        if (!bitmap || cells.length === 0) return;
+        if (schemeSizeBeads.width <= 0 || schemeSizeBeads.height <= 0) return;
+
+        const wrap = patternWrapRef.current;
+        if (!wrap) return;
+
+        const { clientWidth, clientHeight } = wrap;
+        if (clientWidth <= 0 || clientHeight <= 0) return;
+
+        onPreviewZoomChange(
+            computeFitPreviewZoom(
+                cells,
+                cellSizePx,
+                gridLayout,
+                schemeSizeBeads,
+                PREVIEW_PAD,
+                clientWidth,
+                clientHeight,
+            ),
+        );
+        wrap.scrollLeft = 0;
+        wrap.scrollTop = 0;
+        lastAutoFitKeyRef.current = autoFitZoomKey;
+    }, [
+        autoFitZoomKey,
+        bitmap,
+        cells,
+        cellSizePx,
+        gridLayout,
+        schemeSizeBeads,
+        onPreviewZoomChange,
+    ]);
 
     useEffect(() => {
         setSelectedColorIndex((index) =>
@@ -423,6 +468,7 @@ export function PatternPreview({
             pad: PREVIEW_PAD,
             layout: gridLayout,
             canvasBackground,
+            labelPaletteIndices,
             schemeSize: schemeSizeBeads,
         };
 
@@ -433,6 +479,7 @@ export function PatternPreview({
         cellSizePx,
         patternPalette,
         previewZoom,
+        labelPaletteIndices,
         gridLayout,
         canvasBackground,
         schemeSizeBeads,

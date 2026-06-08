@@ -23,6 +23,7 @@ export type BeadSchemeProject = {
         backgroundMode: BackgroundMode;
         backgroundHex: string;
         previewZoom: number;
+        labelPaletteIndices?: boolean;
         canvasBackground: CanvasBackground;
         schemeSize: SchemeSizeBeads;
     };
@@ -212,6 +213,10 @@ export function parseProjectFile(text: string): BeadSchemeProject {
             backgroundMode: settings.backgroundMode as BackgroundMode,
             backgroundHex: settings.backgroundHex,
             previewZoom: settings.previewZoom,
+            labelPaletteIndices:
+                typeof settings.labelPaletteIndices === "boolean"
+                    ? settings.labelPaletteIndices
+                    : false,
             canvasBackground: settings.canvasBackground as CanvasBackground,
             schemeSize: {
                 width: schemeSize.width,

@@ -30,6 +30,8 @@ type SettingsPanelProps = {
     onBackgroundHexChange: (value: string) => void;
     previewZoom: number;
     onPreviewZoomChange: (value: number) => void;
+    labelPaletteIndices: boolean;
+    onLabelPaletteIndicesChange: (value: boolean) => void;
     canvasBackground: CanvasBackground;
     onCanvasBackgroundChange: (value: CanvasBackground) => void;
     onResetPattern: () => void;
@@ -62,6 +64,8 @@ export function SettingsPanel({
     onBackgroundHexChange,
     previewZoom,
     onPreviewZoomChange,
+    labelPaletteIndices,
+    onLabelPaletteIndicesChange,
     canvasBackground,
     onCanvasBackgroundChange,
     onResetPattern,
@@ -235,6 +239,17 @@ export function SettingsPanel({
                     </label>
                 </div>
             </div>
+
+            <label className="field checkbox">
+                <input
+                    type="checkbox"
+                    checked={labelPaletteIndices}
+                    onChange={(event) =>
+                        onLabelPaletteIndicesChange(event.target.checked)
+                    }
+                />
+                Номери кольорів на схемі
+            </label>
 
             <label className="field">
                 <span className="label">
