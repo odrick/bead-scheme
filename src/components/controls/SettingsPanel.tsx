@@ -28,6 +28,7 @@ type SettingsPanelProps = {
     canSaveProject: boolean;
     onExport: () => void;
     onSaveProject: () => void;
+    readOnly?: boolean;
 };
 
 export function SettingsPanel({
@@ -54,129 +55,143 @@ export function SettingsPanel({
     canSaveProject,
     onExport,
     onSaveProject,
+    readOnly = false,
 }: SettingsPanelProps) {
     return (
         <aside className="panel">
-            <label
-                className={`field upload-field ${isUploadDragOver ? "drag-over" : ""}`}
-                onDragOver={onUploadDragOver}
-                onDragLeave={onUploadDragLeave}
-                onDrop={onUploadDrop}
-            >
-                <span className="label">Зображення</span>
-                <input
-                    ref={fileInputRef}
-                    className="upload-input-hidden"
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) =>
-                        onFileSelect(event.target.files?.[0] ?? null)
-                    }
-                />
-                <input
-                    type="button"
-                    className="upload-button"
-                    value="Обрати зображення"
-                    onClick={() => fileInputRef.current?.click()}
-                />
-            </label>
-
-            <DeferredRangeSlider
-                min={2}
-                max={50}
-                value={paletteSize}
-                onCommit={onPaletteSizeChange}
-                title="Кількість кольорів у палітрі"
-                showNumberInput
-                aria-label="Кількість кольорів у палітрі"
-            />
-
-            <DeferredRangeSlider
-                min={2}
-                max={400}
-                value={beadsPerRow}
-                onCommit={onBeadsPerRowChange}
-                title="Кількість бісеринок у ряду"
-                showNumberInput
-                aria-label="Кількість бісеринок у ряду"
-            />
-
-            <div className="field">
-                <span className="label">Тип сітки схеми</span>
-                <div className="layout-toggle">
-                    <label className="layout-option">
-                        <input
-                            type="radio"
-                            name="gridLayout"
-                            checked={gridLayout === "brick"}
-                            onChange={() => onGridLayoutChange("brick")}
-                        />
-                        Цегла
-                    </label>
-                    <label className="layout-option">
-                        <input
-                            type="radio"
-                            name="gridLayout"
-                            checked={gridLayout === "straight"}
-                            onChange={() => onGridLayoutChange("straight")}
-                        />
-                        Пряма
-                    </label>
-                    <label className="layout-option">
-                        <input
-                            type="radio"
-                            name="gridLayout"
-                            checked={gridLayout === "lace"}
-                            onChange={() => onGridLayoutChange("lace")}
-                        />
-                        Ажурна
-                    </label>
-                </div>
-            </div>
-
-            <div className="field">
-                <span className="label">Фон</span>
-                <div className="layout-toggle">
-                    <label className="layout-option">
-                        <input
-                            type="radio"
-                            name="imageBackground"
-                            checked={backgroundMode === "transparent"}
-                            onChange={() =>
-                                onBackgroundModeChange("transparent")
-                            }
-                        />
-                        Прозорий
-                    </label>
-                    <label className="layout-option">
-                        <input
-                            type="radio"
-                            name="imageBackground"
-                            checked={backgroundMode === "color"}
-                            onChange={() => onBackgroundModeChange("color")}
-                        />
-                        Колір
-                    </label>
-                </div>
-            </div>
-
-            {backgroundMode === "color" ? (
-                <label className="field">
-                    <span className="label">Колір фону</span>
-                    <BackgroundColorField
-                        value={backgroundHex}
-                        onCommit={onBackgroundHexChange}
+            <fieldset className="panel-editing-fields" disabled={readOnly}>
+                <label
+                    className={`field upload-field ${!readOnly && isUploadDragOver ? "drag-over" : ""}`}
+                    onDragOver={readOnly ? undefined : onUploadDragOver}
+                    onDragLeave={readOnly ? undefined : onUploadDragLeave}
+                    onDrop={readOnly ? undefined : onUploadDrop}
+                >
+                    <span className="label">Зображення</span>
+                    <input
+                        ref={fileInputRef}
+                        className="upload-input-hidden"
+                        type="file"
+                        accept="image/*"
+                        disabled={readOnly}
+                        onChange={(event) =>
+                            onFileSelect(event.target.files?.[0] ?? null)
+                        }
+                    />
+                    <input
+                        type="button"
+                        className="upload-button"
+                        value="Обрати зображення"
+                        disabled={readOnly}
+                        onClick={() => fileInputRef.current?.click()}
                     />
                 </label>
-            ) : null}
 
-            <button
-                type="button"
-                className="recalculate-button"
-                onClick={onResetPattern}
-            >
-                Скинути
-            </button>
+                <DeferredRangeSlider
+                    min={2}
+                    max={50}
+                    value={paletteSize}
+                    onCommit={onPaletteSizeChange}
+                    title="Кількість кольорів у палітрі"
+                    showNumberInput
+                    disabled={readOnly}
+                    aria-label="Кількість кольорів у палітрі"
+                />
+
+                <DeferredRangeSlider
+                    min={2}
+                    max={400}
+                    value={beadsPerRow}
+                    onCommit={onBeadsPerRowChange}
+                    title="Кількість бісеринок у ряду"
+                    showNumberInput
+                    disabled={readOnly}
+                    aria-label="Кількість бісеринок у ряду"
+                />
+
+                <div className="field">
+                    <span className="label">Тип сітки схеми</span>
+                    <div className="layout-toggle">
+                        <label className="layout-option">
+                            <input
+                                type="radio"
+                                name="gridLayout"
+                                checked={gridLayout === "brick"}
+                                disabled={readOnly}
+                                onChange={() => onGridLayoutChange("brick")}
+                            />
+                            Цегла
+                        </label>
+                        <label className="layout-option">
+                            <input
+                                type="radio"
+                                name="gridLayout"
+                                checked={gridLayout === "straight"}
+                                disabled={readOnly}
+                                onChange={() => onGridLayoutChange("straight")}
+                            />
+                            Пряма
+                        </label>
+                        <label className="layout-option">
+                            <input
+                                type="radio"
+                                name="gridLayout"
+                                checked={gridLayout === "lace"}
+                                disabled={readOnly}
+                                onChange={() => onGridLayoutChange("lace")}
+                            />
+                            Ажурна
+                        </label>
+                    </div>
+                </div>
+
+                <div className="field">
+                    <span className="label">Фон</span>
+                    <div className="layout-toggle">
+                        <label className="layout-option">
+                            <input
+                                type="radio"
+                                name="imageBackground"
+                                checked={backgroundMode === "transparent"}
+                                disabled={readOnly}
+                                onChange={() =>
+                                    onBackgroundModeChange("transparent")
+                                }
+                            />
+                            Прозорий
+                        </label>
+                        <label className="layout-option">
+                            <input
+                                type="radio"
+                                name="imageBackground"
+                                checked={backgroundMode === "color"}
+                                disabled={readOnly}
+                                onChange={() => onBackgroundModeChange("color")}
+                            />
+                            Колір
+                        </label>
+                    </div>
+                </div>
+
+                {backgroundMode === "color" ? (
+                    <label className="field">
+                        <span className="label">Колір фону</span>
+                        <BackgroundColorField
+                            value={backgroundHex}
+                            onCommit={onBackgroundHexChange}
+                            disabled={readOnly}
+                        />
+                    </label>
+                ) : null}
+
+                <button
+                    type="button"
+                    className="recalculate-button"
+                    disabled={readOnly}
+                    onClick={onResetPattern}
+                >
+                    Скинути
+                </button>
+            </fieldset>
 
             <div className="project-actions">
                 <button
@@ -192,6 +207,7 @@ export function SettingsPanel({
                     className="upload-input-hidden"
                     type="file"
                     accept={`.${PROJECT_FILE_EXTENSION},application/json`}
+                    disabled={readOnly}
                     onChange={(event) => {
                         onProjectSelect(event.target.files?.[0] ?? null);
                         event.target.value = "";
@@ -200,6 +216,7 @@ export function SettingsPanel({
                 <button
                     type="button"
                     className="project-button"
+                    disabled={readOnly}
                     onClick={() => projectInputRef.current?.click()}
                 >
                     Завантажити

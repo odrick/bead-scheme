@@ -13,6 +13,10 @@ import {
 } from "./features/export/exportPatternImage";
 import { useImageUpload } from "./features/image/useImageUpload";
 import { usePatternModel } from "./features/pattern/usePatternModel";
+import {
+    isWeavingMode,
+    type SchemeMode,
+} from "./features/pattern/schemeMode";
 import { usePatternRenderCommit } from "./features/pattern/usePatternRenderCommit";
 import {
     buildProjectFile,
@@ -33,7 +37,9 @@ export default function App() {
     const patternModel = usePatternModel(imageUpload.bitmap, { maskImages });
     const { isRendering, commitWithRendering } = usePatternRenderCommit();
     const [exportDialogOpen, setExportDialogOpen] = useState(false);
+    const [schemeMode, setSchemeMode] = useState<SchemeMode>("editing");
     const [previewAutoFitKey, setPreviewAutoFitKey] = useState(0);
+    const isSchemeReadOnly = isWeavingMode(schemeMode);
     const [pendingLoad, setPendingLoad] = useState<{
         project: BeadSchemeProject;
         imageUrl: string;
@@ -150,6 +156,7 @@ export default function App() {
             <div className="layout">
                 <div className="top-row">
                     <SettingsPanel
+                        readOnly={isSchemeReadOnly}
                         fileInputRef={imageUpload.fileInputRef}
                         projectInputRef={projectInputRef}
                         isUploadDragOver={imageUpload.isUploadDragOver}
@@ -188,6 +195,7 @@ export default function App() {
                     />
 
                     <OriginalImagePreview
+                        readOnly={isSchemeReadOnly}
                         bitmap={imageUpload.bitmap}
                         sourceTransform={patternModel.sourceTransform}
                         onSourceTransformCommit={(transform) =>
@@ -222,6 +230,8 @@ export default function App() {
                     />
 
                     <PatternPreview
+                        schemeMode={schemeMode}
+                        onSchemeModeChange={setSchemeMode}
                         autoFitZoomKey={previewAutoFitKey}
                         bitmap={imageUpload.bitmap}
                         cells={patternModel.cells}
@@ -269,6 +279,7 @@ export default function App() {
                 </div>
 
                 <PaletteSection
+                    readOnly={isSchemeReadOnly}
                     palette={patternModel.patternPalette}
                     beadCounts={patternModel.beadCountsByPalette}
                     onColorChange={patternModel.setPaletteColor}

@@ -7,6 +7,7 @@ type DeferredRangeSliderBaseProps = {
     value: number;
     onCommit: (value: number) => void;
     onDraftChange?: (value: number) => void;
+    disabled?: boolean;
     "aria-label"?: string;
     tooltip?: string;
 };
@@ -40,6 +41,7 @@ export function DeferredRangeSlider({
     value,
     onCommit,
     onDraftChange,
+    disabled = false,
     "aria-label": ariaLabel,
     tooltip,
     ...rest
@@ -73,6 +75,8 @@ export function DeferredRangeSlider({
     };
 
     const commit = (next: number) => {
+        if (disabled) return;
+
         setDraft(next);
         setInputDraft(String(next));
 
@@ -82,6 +86,8 @@ export function DeferredRangeSlider({
     };
 
     const updateDraft = (next: number) => {
+        if (disabled) return;
+
         setDraft(next);
         onDraftChange?.(next);
 
@@ -109,11 +115,13 @@ export function DeferredRangeSlider({
             max={max}
             step={step}
             value={draft}
+            disabled={disabled}
             aria-label={
                 showNumberInput ? `${ariaLabel}, повзунок` : ariaLabel
             }
             title={tooltip}
             onPointerDown={(event) => {
+                if (disabled) return;
                 isDraggingRef.current = true;
                 event.currentTarget.setPointerCapture(event.pointerId);
             }}
@@ -172,6 +180,7 @@ export function DeferredRangeSlider({
                             max={max}
                             step={step ?? 1}
                             value={inputDraft}
+                            disabled={disabled}
                             aria-label={ariaLabel}
                             onFocus={() => {
                                 isInputFocusedRef.current = true;

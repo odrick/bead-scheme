@@ -9,11 +9,13 @@ const COMMIT_DEBOUNCE_MS = 180;
 type BackgroundColorFieldProps = {
     value: string;
     onCommit: (hex: string) => void;
+    disabled?: boolean;
 };
 
 export function BackgroundColorField({
     value,
     onCommit,
+    disabled = false,
 }: BackgroundColorFieldProps) {
     const [draftHex, setDraftHex] = useState(value);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -35,12 +37,14 @@ export function BackgroundColorField({
     }, [value]);
 
     const commit = useCallback((hex: string) => {
+        if (disabled) return;
+
         setDraftHex(hex);
         draftHexRef.current = hex;
         if (hex !== committedHexRef.current) {
             onCommitRef.current(hex);
         }
-    }, []);
+    }, [disabled]);
 
     const flushCommit = useCallback(() => {
         if (commitDebounceRef.current) {
@@ -67,11 +71,13 @@ export function BackgroundColorField({
 
     const applyDraft = useCallback(
         (hex: string) => {
+            if (disabled) return;
+
             draftHexRef.current = hex;
             setDraftHex(hex);
             scheduleCommit();
         },
-        [scheduleCommit],
+        [disabled, scheduleCommit],
     );
 
     useEffect(() => {
@@ -114,6 +120,8 @@ export function BackgroundColorField({
     }, [applyDraft, flushCommit]);
 
     const handleEyedropper = useCallback(async () => {
+        if (disabled) return;
+
         if (commitDebounceRef.current) {
             clearTimeout(commitDebounceRef.current);
             commitDebounceRef.current = null;
@@ -121,7 +129,7 @@ export function BackgroundColorField({
 
         const picked = await pickScreenColor();
         if (picked) commit(picked);
-    }, [commit]);
+    }, [commit, disabled]);
 
     return (
         <div className="color-field-row">
@@ -129,12 +137,13 @@ export function BackgroundColorField({
                 ref={inputRef}
                 type="color"
                 value={draftHex}
+                disabled={disabled}
                 onChange={(event) => applyDraft(event.target.value)}
             />
             <button
                 type="button"
                 className="eyedropper-button"
-                disabled={!eyedropperAvailable}
+                disabled={disabled || !eyedropperAvailable}
                 title={
                     eyedropperAvailable
                         ? "Піпетка — вибрати колір з екрана"

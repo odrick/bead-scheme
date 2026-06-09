@@ -42,11 +42,11 @@ import {
     type PaintBrickPreviewOptions,
     type SchemeSizeBeads,
 } from "../../features/preview/canvasUtils";
+import type { SchemeMode } from "../../features/pattern/schemeMode";
 import type { WeavingCurtains } from "../../features/preview/weavingCurtains";
 import { WeavingCurtainsOverlay } from "./WeavingCurtainsOverlay";
 
 type EditTool = "pan" | "pencil" | "eraser" | "fill";
-type SchemeMode = "editing" | "weaving";
 
 type PatternPreviewProps = {
     autoFitZoomKey: number;
@@ -109,6 +109,8 @@ type PatternPreviewProps = {
     onSchemeSizeChange: (width: number, height: number) => void;
     weavingCurtains: WeavingCurtains;
     onWeavingCurtainsChange: Dispatch<SetStateAction<WeavingCurtains>>;
+    schemeMode: SchemeMode;
+    onSchemeModeChange: (mode: SchemeMode) => void;
 };
 
 const PREVIEW_PAD = 6;
@@ -344,11 +346,13 @@ function CanvasBackgroundSwatch({
 type PatternCanvasBackgroundMenuProps = {
     value: CanvasBackground;
     onChange: (value: CanvasBackground) => void;
+    disabled?: boolean;
 };
 
 function PatternCanvasBackgroundMenu({
     value,
     onChange,
+    disabled = false,
 }: PatternCanvasBackgroundMenuProps) {
     const rootRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
@@ -368,6 +372,8 @@ function PatternCanvasBackgroundMenu({
     }, [open]);
 
     const pick = (next: CanvasBackground) => {
+        if (disabled) return;
+
         onChange(next);
         setOpen(false);
     };
@@ -384,7 +390,12 @@ function PatternCanvasBackgroundMenu({
                 aria-label="Фон канвасу схеми"
                 aria-expanded={open}
                 aria-haspopup="listbox"
-                onClick={() => setOpen((current) => !current)}
+                disabled={disabled}
+                onClick={() => {
+                    if (disabled) return;
+
+                    setOpen((current) => !current);
+                }}
             >
                 <CanvasBackgroundSwatch background={value} />
             </button>
@@ -763,6 +774,8 @@ export function PatternPreview({
     onSchemeSizeChange,
     weavingCurtains,
     onWeavingCurtainsChange,
+    schemeMode,
+    onSchemeModeChange,
 }: PatternPreviewProps) {
     const patternCanvasRef = useRef<HTMLCanvasElement>(null);
     const patternWrapRef = useRef<HTMLDivElement>(null);
@@ -775,7 +788,6 @@ export function PatternPreview({
         scrollTop: 0,
     });
 
-    const [schemeMode, setSchemeMode] = useState<SchemeMode>("editing");
     const [editTool, setEditTool] = useState<EditTool>("pan");
     const [paintSelection, setPaintSelection] =
         useState<PatternPaintSelection>({ kind: "palette", index: 0 });
@@ -1367,7 +1379,7 @@ export function PatternPreview({
                                 type="radio"
                                 name="schemeMode"
                                 checked={schemeMode === "editing"}
-                                onChange={() => setSchemeMode("editing")}
+                                onChange={() => onSchemeModeChange("editing")}
                             />
                             Редагування
                         </label>
@@ -1376,7 +1388,7 @@ export function PatternPreview({
                                 type="radio"
                                 name="schemeMode"
                                 checked={schemeMode === "weaving"}
-                                onChange={() => setSchemeMode("weaving")}
+                                onChange={() => onSchemeModeChange("weaving")}
                             />
                             Плетіння
                         </label>

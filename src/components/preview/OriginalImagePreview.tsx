@@ -49,6 +49,7 @@ type OriginalImagePreviewProps = {
     onDragOver: DragEventHandler<HTMLElement>;
     onDragLeave: DragEventHandler<HTMLElement>;
     onDrop: DragEventHandler<HTMLElement>;
+    readOnly?: boolean;
 };
 
 function isImagePanButton(button: number): boolean {
@@ -88,6 +89,7 @@ export function OriginalImagePreview({
     onDragOver,
     onDragLeave,
     onDrop,
+    readOnly = false,
 }: OriginalImagePreviewProps) {
     const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
     const customMaskInputRef = useRef<HTMLInputElement>(null);
@@ -232,6 +234,8 @@ export function OriginalImagePreview({
 
     const handlePointerDown: PointerEventHandler<HTMLCanvasElement> = useCallback(
         (event) => {
+            if (readOnly) return;
+
             const point = pointerToImageCoords(event.clientX, event.clientY);
             if (!point) return;
 
@@ -261,11 +265,13 @@ export function OriginalImagePreview({
                 startImageY: point.y,
             };
         },
-        [resolveDragMode, pointerToImageCoords],
+        [readOnly, resolveDragMode, pointerToImageCoords],
     );
 
     const handlePointerMove: PointerEventHandler<HTMLCanvasElement> = useCallback(
         (event) => {
+            if (readOnly) return;
+
             const drag = dragRef.current;
             if (!drag || drag.pointerId !== event.pointerId) return;
 
@@ -290,7 +296,7 @@ export function OriginalImagePreview({
                 offsetY,
             });
         },
-        [pointerToImageCoords, updatePreviewMask, updatePreviewSource],
+        [readOnly, pointerToImageCoords, updatePreviewMask, updatePreviewSource],
     );
 
     const finishDrag = useCallback(
@@ -342,15 +348,15 @@ export function OriginalImagePreview({
         previewMask.kind !== "none" &&
         (previewMask.kind !== "custom" || !!maskImages.custom);
 
-    const canPanImage = !!bitmap;
+    const canPanImage = !!bitmap && !readOnly;
     const canvasCursorClass = canPanImage ? " thumb--pan-active" : "";
 
     return (
         <section
-            className={`preview-block preview-original ${isDragOver ? "drag-over" : ""}`}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
+            className={`preview-block preview-original${!readOnly && isDragOver ? " drag-over" : ""}${readOnly ? " preview-original--read-only" : ""}`}
+            onDragOver={readOnly ? undefined : onDragOver}
+            onDragLeave={readOnly ? undefined : onDragLeave}
+            onDrop={readOnly ? undefined : onDrop}
         >
             <h2>Оригінал</h2>
             {!bitmap && (
@@ -372,7 +378,10 @@ export function OriginalImagePreview({
                         />
                     </div>
 
-                    <div className="original-controls">
+                    <fieldset
+                        className="original-controls"
+                        disabled={readOnly}
+                    >
                         <div className="original-image-controls">
                             <div className="original-control-row">
                                 <span
@@ -387,6 +396,7 @@ export function OriginalImagePreview({
                                     max={SOURCE_SCALE_MAX}
                                     step={SOURCE_SCALE_STEP}
                                     value={sourceTransform.scale}
+                                    disabled={readOnly}
                                     onDraftChange={(scale) =>
                                         updatePreviewSource({
                                             ...previewSourceRef.current,
@@ -407,7 +417,10 @@ export function OriginalImagePreview({
                                     className="pattern-tool-btn original-transform-reset"
                                     title="Скинути масштаб і положення"
                                     aria-label="Скинути масштаб і положення"
-                                    disabled={isDefaultSourceTransform(sourceTransform)}
+                                    disabled={
+                                        readOnly ||
+                                        isDefaultSourceTransform(sourceTransform)
+                                    }
                                     onClick={onResetSourceTransform}
                                 >
                                     <UndoIcon />
@@ -422,6 +435,7 @@ export function OriginalImagePreview({
                                     <select
                                         className="mask-select"
                                         value={maskSettings.kind}
+                                        disabled={readOnly}
                                         onChange={(event) =>
                                             onMaskKindChange(
                                                 event.target.value as MaskKind,
@@ -445,6 +459,7 @@ export function OriginalImagePreview({
                                                 className="upload-input-hidden"
                                                 type="file"
                                                 accept="image/*"
+                                                disabled={readOnly}
                                                 onChange={(event) => {
                                                     onCustomMaskFileSelect(
                                                         event.target.files?.[0] ??
@@ -457,6 +472,7 @@ export function OriginalImagePreview({
                                                 type="button"
                                                 className="upload-button upload-button--compact"
                                                 title="Обрати зображення маски"
+                                                disabled={readOnly}
                                                 onClick={() =>
                                                     customMaskInputRef.current?.click()
                                                 }
@@ -482,6 +498,7 @@ export function OriginalImagePreview({
                                         max={MASK_SCALE_MAX}
                                         step={MASK_SCALE_STEP}
                                         value={maskSettings.scale}
+                                        disabled={readOnly}
                                         onDraftChange={(scale) =>
                                             updatePreviewMask({
                                                 ...previewMaskRef.current,
@@ -500,7 +517,7 @@ export function OriginalImagePreview({
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </fieldset>
                 </>
             )}
         </section>

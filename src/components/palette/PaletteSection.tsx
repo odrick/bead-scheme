@@ -5,6 +5,7 @@ type PaletteSectionProps = {
     beadCounts: number[];
     onColorChange: (index: number, hex: string) => void;
     onColorReset: (index: number) => void;
+    readOnly?: boolean;
 };
 
 export function PaletteSection({
@@ -12,11 +13,14 @@ export function PaletteSection({
     beadCounts,
     onColorChange,
     onColorReset,
+    readOnly = false,
 }: PaletteSectionProps) {
     if (palette.length === 0) return null;
 
     return (
-        <section className="palette-section">
+        <section
+            className={`palette-section${readOnly ? " palette-section--read-only" : ""}`}
+        >
             <h2>Палітра ({palette.length})</h2>
             <ul className="palette">
                 {palette.map((color, index) => (
@@ -29,6 +33,8 @@ export function PaletteSection({
                             className="dot-picker"
                             aria-label={`Змінити колір ${index + 1}`}
                             onContextMenu={(event) => {
+                                if (readOnly) return;
+
                                 event.preventDefault();
                                 onColorReset(index);
                             }}
@@ -41,6 +47,7 @@ export function PaletteSection({
                                 className="palette-color-input"
                                 type="color"
                                 value={rgbToHex(color)}
+                                disabled={readOnly}
                                 aria-label={`Колір палітри ${index + 1}`}
                                 onChange={(event) =>
                                     onColorChange(index, event.target.value)
